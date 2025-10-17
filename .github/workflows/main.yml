@@ -1,23 +1,26 @@
 name: Despliegue Automático a GitHub Pages
 
-# Se ejecuta en cada 'push' a la rama 'main'
 on:
   push:
     branches:
       - main
-# Esto es necesario para que el despliegue de Pages funcione
+  # Esto permite ejecutar el workflow manualmente si es necesario
   workflow_dispatch: 
 
-# >>> AÑADIR ESTA SECCIÓN DE PERMISOS AQUÍ <<<
+# >>> ESTA SECCIÓN DEBE ESTAR AQUÍ, CON LA MISMA INDENTACIÓN QUE 'name' y 'on' <<<
 permissions:
-  contents: read # Permite que el workflow lea el código
-  pages: write   # Permite que el workflow publique la página
-  id-token: write # Permite que el workflow se autentique para publicar
+  contents: read  # Permite que el workflow lea tu código (index.html, app.js)
+  pages: write    # Permite que el workflow escriba los archivos de la página
+  id-token: write # Permite que el workflow se autentique para Pages (SOLUCIONA EL ERROR)
 
 # Define el trabajo de despliegue
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Aseguramos que solo se ejecute si la rama es 'main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
       - name: Checkout del Repositorio
@@ -31,33 +34,6 @@ jobs:
         with:
           path: '.' 
           
-      - name: Publicar GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-# Define el trabajo de despliegue
-jobs:
-  deploy:
-    # Ejecutar en el sistema operativo más reciente
-    runs-on: ubuntu-latest
-    
-    # Pasos del trabajo
-    steps:
-      # Paso 1: Clonar el código
-      - name: Checkout del Repositorio
-        uses: actions/checkout@v4
-      
-      # Paso 2: Configurar la publicación en GitHub Pages
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v5
-      
-      # Paso 3: Desplegar el contenido de la carpeta raíz
-      - name: Despliegue con GitHub Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # La carpeta que contiene index.html
-          path: '.' 
-          
-      # Paso 4: Finalizar el despliegue
       - name: Publicar GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
