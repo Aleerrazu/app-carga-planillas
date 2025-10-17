@@ -524,15 +524,30 @@ auth.onAuthStateChanged((user) => {
         // --- AYUDA PARA DEPURAR EL ADMIN_UID ---
         console.log("--- CONFIGURACIÓN DE USUARIO ---");
         console.log("Tu UID actual (user.uid) es:", user.uid);
-        console.log("El ADMIN_UID configurado es:", ADMIN_UID);
+        console.log("El ADMIN_UID configurado es:", Nw3h2xXv6beBFe6qD8w0lL2IfOz2);
         console.log("----------------------------------");
         // ----------------------------------------
         
-        authView.classList.add('hidden');
-        privateView.classList.remove('hidden');
-        document.getElementById('user-email-display').textContent = user.email;
-
-        // Cargar configuración del empleado (necesaria para el nombre/horario, incluso para el admin)
+        // ** PRIMERO VERIFICAR ROL **
+        if (user.uid === ADMIN_UID) {
+            // ROL: ADMINISTRADOR
+            document.getElementById('user-email-display').textContent = user.email;
+            employeeNameEl.textContent = 'ADMINISTRADOR'; // Establecer nombre de forma inmediata
+            horarioHabitualDisplayEl.textContent = 'Gestión de Empleados';
+            
+            authView.classList.add('hidden');
+            privateView.classList.remove('hidden');
+            adminViewEl.classList.remove('hidden'); // Mostrar vista Admin
+            document.getElementById('employee-dashboard').classList.add('hidden'); // Ocultar vista Empleado
+            
+            loadEmployeeList(); // Cargar lista de empleados para gestión
+            showMessage('');
+            return; // Detener la ejecución para Admin
+        }
+        
+        // ** SEGUNDO VERIFICAR EMPLEADO **
+        
+        // Cargar configuración del empleado (necesaria para el nombre/horario)
         db.collection("employee_config").where("userId", "==", user.uid).get()
             .then(snapshot => {
                 if (snapshot.empty) {
@@ -542,20 +557,16 @@ auth.onAuthStateChanged((user) => {
                     return;
                 }
                 
+                // ROL: EMPLEADO (Configurado)
                 employeeConfig = snapshot.docs[0].data(); // Guardar config globalmente
                 employeeNameEl.textContent = employeeConfig.nombre;
                 horarioHabitualDisplayEl.textContent = employeeConfig.horarioHabitual;
 
-                // Si es admin, mostrar panel de gestión
-                if (user.uid === Nw3h2xXv6beBFe6qD8w0lL2IfOz2) {
-                    adminViewEl.classList.remove('hidden');
-                    document.getElementById('employee-dashboard').classList.add('hidden');
-                } else {
-                    adminViewEl.classList.add('hidden');
-                    document.getElementById('employee-dashboard').classList.remove('hidden');
-                    // Iniciar la carga del reporte mensual para el empleado
-                    loadMonthlyReport(user.uid, employeeConfig.horarioHabitual);
-                }
+                adminViewEl.classList.add('hidden'); // Ocultar vista Admin
+                document.getElementById('employee-dashboard').classList.remove('hidden'); // Mostrar vista Empleado
+                
+                // Iniciar la carga del reporte mensual para el empleado
+                loadMonthlyReport(user.uid, employeeConfig.horarioHabitual);
             })
             .catch(error => {
                 console.error("Error al cargar config: ", error);
@@ -569,5 +580,7 @@ auth.onAuthStateChanged((user) => {
         document.getElementById('login-form').classList.remove('hidden');
         document.getElementById('register-form').classList.add('hidden');
     }
+});
+
 });
 
