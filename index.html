@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Gemini - Login y Registro con Firebase</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f4f4; margin: 0; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); width: 300px; text-align: center; }
+        input { width: calc(100% - 20px); padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #5cb85c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #4cae4c; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="auth-view">
+        <h2>Bienvenido a la App Gemini</h2>
+        <p id="message" style="color: red;"></p>
+
+        <div id="register-form">
+            <h3>Registrarse</h3>
+            <input type="email" id="reg-email" placeholder="Correo Electrónico" required>
+            <input type="password" id="reg-password" placeholder="Contraseña (mín. 6 caracteres)" required>
+            <button onclick="registerUser()">Registrar</button>
+            <p>¿Ya tienes cuenta? <a href="#" onclick="showLogin()">Inicia Sesión</a></p>
+        </div>
+
+        <div id="login-form" class="hidden">
+            <h3>Iniciar Sesión</h3>
+            <input type="email" id="log-email" placeholder="Correo Electrónico" required>
+            <input type="password" id="log-password" placeholder="Contraseña" required>
+            <button onclick="loginUser()">Entrar</button>
+            <p>¿No tienes cuenta? <a href="#" onclick="showRegister()">Regístrate</a></p>
+        </div>
+    </div>
+
+    <div id="private-view" class="hidden">
+        <h2>🔒 Área Privada</h2>
+        <p>¡Hola! Has iniciado sesión con éxito.</p>
+        <p>Tu correo es: <strong id="user-email"></strong></p>
+        <button onclick="logoutUser()" style="background-color: #d9534f;">Cerrar Sesión</button>
+    </div>
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
