@@ -7,8 +7,6 @@ const firebaseConfig = {
   appId: "1:447263250565:web:6704994cbfbfe7c98b31ec"
 };
 
-// ---------------------------------------------
-
 // =======================================================
 // === INICIALIZACIÓN Y REFERENCIAS ======================
 // =======================================================
@@ -36,7 +34,7 @@ const currentMonth = new Date().toISOString().substring(0, 7); // Ej: 2025-10
 document.getElementById('current-month-display').textContent = currentMonth;
 
 
-// ID de usuario Administrador (DEBES REEMPLAZAR ESTO CON TU PROPIO UID)
+// ID de usuario Administrador (DEBES REEMPLAZAR ESTO CON TU PROPIO UID REAL)
 const ADMIN_UID = "REEMPLAZA_ESTO_CON_TU_UID_DE_ADMIN"; 
 
 
@@ -163,7 +161,6 @@ async function adminCreateOrUpdateEmployee() {
             // Buscar el UID por email (Firestore no lo hace directamente, requiere un paso extra)
             // Ya que no podemos obtener el UID directamente por email del Auth en el cliente, 
             // asumiremos que el admin debe copiar el UID manualmente si es un usuario existente.
-            // Para simplificar, si no está en config, lo creamos con un placeholder UID.
             adminActionMessageEl.style.color = 'orange';
             adminActionMessageEl.textContent = 'AVISO: Primero el empleado debe registrarse. Crea el registro en config manualmente usando su UID.';
             
@@ -262,18 +259,19 @@ function exportToCsv() {
 // 5. Función de Administración: Ver Reporte de un Empleado (Muestra datos en la consola para simplificar)
 function viewEmployeeReport(userId, employeeName) {
     // Usamos el alert() para informar que la acción se ve en la consola (ya que no tenemos una subvista de reportes)
-    alert(`Mostrando reportes de ${employeeName} en la consola del navegador. Abre la pestaña 'Console' en Inspector.`);
-    
-    db.collection("timesheets").where("userId", "==", userId).get().then(snapshot => {
-        console.log(`--- REPORTES MENSUALES DE ${employeeName.toUpperCase()} ---`);
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            console.log(`[${data.fecha}] Tipo: ${data.tipoReporte}, Detalle: ${data.horarioReportado}, Comentarios: ${data.comentarios}`);
-        });
-        console.log('--- FIN DEL REPORTE ---');
-        adminActionMessageEl.style.color = 'green';
-        adminActionMessageEl.textContent = `Reportes de ${employeeName} listados en la consola.`;
-    }).catch(e => console.error("Error al ver reportes:", e));
+    // NOTA: En un entorno de producción real, esto debería ser una vista dentro de la app.
+    if (confirm(`¿Estás seguro que quieres ver los reportes de ${employeeName}? Se listarán en la consola del navegador.`)) {
+        db.collection("timesheets").where("userId", "==", userId).get().then(snapshot => {
+            console.log(`--- REPORTES MENSUALES DE ${employeeName.toUpperCase()} ---`);
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                console.log(`[${data.fecha}] Tipo: ${data.tipoReporte}, Detalle: ${data.horarioReportado}, Comentarios: ${data.comentarios}`);
+            });
+            console.log('--- FIN DEL REPORTE ---');
+            adminActionMessageEl.style.color = 'green';
+            adminActionMessageEl.textContent = `Reportes de ${employeeName} listados en la consola.`;
+        }).catch(e => console.error("Error al ver reportes:", e));
+    }
 }
 
 
@@ -386,7 +384,7 @@ function showDetailedInput(dateString, type) {
     }
     
     // Insertar una nueva fila debajo de la actual para los inputs
-    const newRow = timesheetBodyEl.insertRow(currentRow.rowIndex);
+    const newRow = timesheetBodyEl.insertRow(currentRow.rowIndex + 1);
     newRow.id = `extra-row-${dateString}`;
     newRow.classList.add('extra-input-row');
     
@@ -494,17 +492,26 @@ function saveExtraDayTimeSheet() {
         showMessage("Debes especificar la fecha y el horario trabajado para el día extra.", true);
         return;
     }
-
-    const reportData = createReportObject(date, 'DIA_EXTRA', horarioReportado, comentarios);
-
-    db.collection("timesheets").add(reportData)
-        .then(() => {
-            showMessage(`✅ Día Extra reportado para ${date}.`, false);
-            showExtraDayForm(); // Ocultar formulario
-        })
-        .catch((error) => {
-            showMessage(`Error al guardar día extra: ${error.message}`, true);
-        });
+    
+    // Verifica que no haya un reporte para esa fecha antes de marcar como DÍA_EXTRA
+    db.collection("timesheets").where("userId", "==", auth.currentUser.uid).where("fecha", "==", date).get().then(snapshot => {
+        if (!snapshot.empty) {
+            showMessage(`Ya existe un reporte para el ${date}. Si quieres editarlo, usa la tabla.`, true);
+            return;
+        }
+    
+        const reportData = createReportObject(date, 'DIA_EXTRA', horarioReportado, comentarios);
+    
+        db.collection("timesheets").add(reportData)
+            .then(() => {
+                showMessage(`✅ Día Extra reportado para ${date}.`, false);
+                showExtraDayForm(); // Ocultar formulario
+                loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual); // Recargar
+            })
+            .catch((error) => {
+                showMessage(`Error al guardar día extra: ${error.message}`, true);
+            });
+    });
 }
 
 
@@ -514,11 +521,18 @@ function saveExtraDayTimeSheet() {
 
 auth.onAuthStateChanged((user) => {
     if (user) {
+        // --- AYUDA PARA DEPURAR EL ADMIN_UID ---
+        console.log("--- CONFIGURACIÓN DE USUARIO ---");
+        console.log("Tu UID actual (user.uid) es:", user.uid);
+        console.log("El ADMIN_UID configurado es:", ADMIN_UID);
+        console.log("----------------------------------");
+        // ----------------------------------------
+        
         authView.classList.add('hidden');
         privateView.classList.remove('hidden');
         document.getElementById('user-email-display').textContent = user.email;
 
-        // Cargar configuración del empleado
+        // Cargar configuración del empleado (necesaria para el nombre/horario, incluso para el admin)
         db.collection("employee_config").where("userId", "==", user.uid).get()
             .then(snapshot => {
                 if (snapshot.empty) {
@@ -527,12 +541,13 @@ auth.onAuthStateChanged((user) => {
                     showMessage('⚠️ Tu usuario aún no está configurado por el administrador.', true);
                     return;
                 }
+                
                 employeeConfig = snapshot.docs[0].data(); // Guardar config globalmente
                 employeeNameEl.textContent = employeeConfig.nombre;
                 horarioHabitualDisplayEl.textContent = employeeConfig.horarioHabitual;
 
                 // Si es admin, mostrar panel de gestión
-                if (user.uid === ADMIN_UID) {
+                if (user.uid === Nw3h2xXv6beBFe6qD8w0lL2IfOz2) {
                     adminViewEl.classList.remove('hidden');
                     document.getElementById('employee-dashboard').classList.add('hidden');
                 } else {
