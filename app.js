@@ -28,12 +28,11 @@ const horarioReportadoEl = document.getElementById('horario-reportado');
 const adminViewEl = document.getElementById('admin-view');
 
 // ID de usuario Administrador (DEBES REEMPLAZAR ESTO CON TU PROPIO UID)
-// Puedes obtener tu UID en Firebase Auth. Úsalo para acceder a la función de exportación.
 const ADMIN_UID = "REEMPLAZA_ESTO_CON_TU_UID_DE_ADMIN"; 
 
 
 // =======================================================
-// === INTERFAZ Y UTILIDADES =============================
+// === FUNCIONES DE INTERFAZ Y AUTENTICACIÓN (Inicio/Registro) ===
 // =======================================================
 
 function showMessage(msg, isError = true) {
@@ -41,20 +40,53 @@ function showMessage(msg, isError = true) {
     messageEl.style.color = isError ? 'red' : 'green';
 }
 
-// Escucha los cambios en los radio buttons para mostrar/ocultar el campo de detalle
-document.querySelectorAll('input[name="report_type"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-        const selectedType = document.querySelector('input[name="report_type"]:checked').value;
-        if (selectedType === 'EXTRA' || selectedType === 'FALTA') {
-            extraHoursSectionEl.classList.remove('hidden');
-            horarioReportadoEl.placeholder = (selectedType === 'EXTRA') 
-                ? "Ej: 08:00 a 19:00, 3 horas extra, etc." 
-                : "Ej: Ausencia médica, Salí a las 15:00, etc.";
-        } else {
-            extraHoursSectionEl.classList.add('hidden');
-        }
-    });
-});
+function showLogin() {
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('register-form').classList.add('hidden');
+    messageEl.textContent = '';
+}
+
+function showRegister() {
+    document.getElementById('register-form').classList.remove('hidden');
+    document.getElementById('login-form').classList.add('hidden');
+    messageEl.textContent = '';
+}
+
+function registerUser() {
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+    
+    auth.createUserWithEmailAndPassword(email, password)
+        .then(() => {
+            showMessage("✅ Registro exitoso.", false);
+        })
+        .catch((error) => {
+            showMessage(`Error de Registro: ${error.message}`);
+        });
+}
+
+function loginUser() {
+    const email = document.getElementById('log-email').value;
+    const password = document.getElementById('log-password').value;
+    
+    auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+            showMessage("✅ Inicio de sesión exitoso.", false);
+        })
+        .catch((error) => {
+            showMessage(`Error de Login: ${error.message}`);
+        });
+}
+
+function logoutUser() {
+    auth.signOut()
+        .then(() => {
+            showMessage("Sesión cerrada. Vuelve pronto.", false);
+        })
+        .catch((error) => {
+            showMessage(`Error al cerrar sesión: ${error.message}`);
+        });
+}
 
 // =======================================================
 // === FUNCIÓN DE CARGA DE DATOS DEL EMPLEADO ============
@@ -89,8 +121,22 @@ function loadEmployeeConfig(user) {
 
 
 // =======================================================
-// === LÓGICA PRINCIPAL: GUARDAR REPORTE =================
+// === LÓGICA DE INTERFAZ Y REPORTE ======================
 // =======================================================
+
+// Escucha los cambios en los radio buttons para mostrar/ocultar el campo de detalle
+function handleReportTypeChange() {
+    const selectedType = document.querySelector('input[name="report_type"]:checked').value;
+    if (selectedType === 'EXTRA' || selectedType === 'FALTA') {
+        extraHoursSectionEl.classList.remove('hidden');
+        horarioReportadoEl.placeholder = (selectedType === 'EXTRA') 
+            ? "Ej: 08:00 a 19:00 (o 3 horas extra)" 
+            : "Ej: Ausencia médica, Salí a las 15:00, etc.";
+    } else {
+        extraHoursSectionEl.classList.add('hidden');
+    }
+}
+
 
 function saveTimeSheet() {
     const reportDate = document.getElementById('report-date').value;
@@ -109,14 +155,14 @@ function saveTimeSheet() {
         return;
     }
     if ((reportType === 'EXTRA' || reportType === 'FALTA') && !horarioReportado) {
-        showMessage("Por favor, detalla las horas/motivo en la sección de Comentarios/Horario Reportado.", true);
+        showMessage("Por favor, detalla las horas/motivo en la sección Detalle de Horas/Diferentes.", true);
         return;
     }
 
     const reportData = {
         userId: userUID,
         email: auth.currentUser.email,
-        nombre: employeeNameEl.textContent, // Usamos el nombre cargado de la configuración
+        nombre: employeeNameEl.textContent, // Se toma el nombre cargado desde la config
         mesAnio: monthYear,
         fecha: reportDate,
         tipoReporte: reportType,
@@ -140,6 +186,7 @@ function saveTimeSheet() {
             db.collection("timesheets").add(reportData)
                 .then(() => {
                     showMessage("✅ Reporte diario guardado con éxito.", false);
+                    // Limpiar campos
                     document.getElementById('comentarios').value = '';
                     horarioReportadoEl.value = '';
                 })
@@ -219,12 +266,16 @@ auth.onAuthStateChanged((user) => {
         // Cargar configuración del empleado al iniciar sesión
         loadEmployeeConfig(user); 
         
+        // Ejecutar la lógica de interfaz inicial (muestra/oculta el campo de detalle)
+        // Esto inicializa el listener para los radio buttons
+        // handleReportTypeChange(); // No es necesario llamar aquí, se llama por el DOMContentLoaded implícito.
+
         showMessage('');
     } else {
         // Usuario no logueado: Muestra la vista de autenticación
         authView.classList.remove('hidden');
         privateView.classList.add('hidden');
-        // Aseguramos que solo muestre login/registro y no el error de guardado
+        // Aseguramos que solo muestre login/registro
         document.getElementById('login-form').classList.remove('hidden');
         document.getElementById('register-form').classList.add('hidden');
     }

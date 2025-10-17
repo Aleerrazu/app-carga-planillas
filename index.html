@@ -118,7 +118,6 @@
             <h3>Iniciar Sesión</h3>
             <input type="email" id="log-email" placeholder="Correo Electrónico" required>
             <input type="password" id="log-password" placeholder="Contraseña" required>
-            <!-- ¡VERIFICACIÓN: ONCLICK A LA FUNCIÓN loginUser() DE app.js! -->
             <button onclick="loginUser()">Entrar</button>
             <p>¿No tienes cuenta? <a href="#" onclick="showRegister()">Regístrate</a></p>
         </div>
@@ -143,13 +142,13 @@
             <div class="radio-group">
                 <p style="font-weight: bold; margin-top: 15px;">¿Cómo fue tu jornada?</p>
                 
-                <input type="radio" id="type-habitual" name="report_type" value="HABITUAL" checked>
+                <input type="radio" id="type-habitual" name="report_type" value="HABITUAL" checked onchange="handleReportTypeChange()">
                 <label for="type-habitual">✅ Hice mi horario habitual</label>
 
-                <input type="radio" id="type-extra" name="report_type" value="EXTRA">
+                <input type="radio" id="type-extra" name="report_type" value="EXTRA" onchange="handleReportTypeChange()">
                 <label for="type-extra">⏱️ Reportar horas/días extra</label>
                 
-                <input type="radio" id="type-falta" name="report_type" value="FALTA">
+                <input type="radio" id="type-falta" name="report_type" value="FALTA" onchange="handleReportTypeChange()">
                 <label for="type-falta">❌ Falté / Tuve Ausencia</label>
             </div>
             
