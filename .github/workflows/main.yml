@@ -1,0 +1,35 @@
+name: Despliegue Automático a GitHub Pages
+
+# Se ejecuta en cada 'push' a la rama 'main'
+on:
+  push:
+    branches:
+      - main
+
+# Define el trabajo de despliegue
+jobs:
+  deploy:
+    # Ejecutar en el sistema operativo más reciente
+    runs-on: ubuntu-latest
+    
+    # Pasos del trabajo
+    steps:
+      # Paso 1: Clonar el código
+      - name: Checkout del Repositorio
+        uses: actions/checkout@v4
+      
+      # Paso 2: Configurar la publicación en GitHub Pages
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+      
+      # Paso 3: Desplegar el contenido de la carpeta raíz
+      - name: Despliegue con GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # La carpeta que contiene index.html
+          path: '.' 
+          
+      # Paso 4: Finalizar el despliegue
+      - name: Publicar GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
