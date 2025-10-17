@@ -3,23 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Gemini - Login y Registro con Firebase</title>
+    <title>App Planillas - Dashboard</title>
+    
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
     <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f4f4; margin: 0; }
-        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); width: 300px; text-align: center; }
-        input { width: calc(100% - 20px); padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background-color: #5cb85c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        button:hover { background-color: #4cae4c; }
-        .hidden { display: none; }
+        /* Estilos Mobile-First y Responsive */
+        body { 
+            font-family: Arial, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-start; /* Alinea arriba para evitar que el teclado oculte campos */
+            min-height: 100vh; 
+            background-color: #f4f4f4; 
+            margin: 0; 
+            padding: 20px 10px; /* Padding reducido para móviles */
+        }
+        .container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
+            width: 100%; /* Ocupa todo el ancho en móvil */
+            max-width: 600px; /* Ancho máximo para escritorio */
+            text-align: center; 
+            box-sizing: border-box; 
+        }
+        
+        /* Estilos de inputs y botones */
+        input, button { 
+            width: 100%; 
+            padding: 10px; 
+            margin: 8px 0; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+        }
+        button { 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            background-color: #5cb85c; 
+        }
+        button:hover { 
+            opacity: 0.9; 
+        }
+        .hidden { 
+            display: none; 
+        }
+        .card { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            border-radius: 6px; 
+            text-align: left; 
+            margin-bottom: 20px;
+        }
+        
+        /* Estilos de Tabla (Clave para Mobile-First) */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px; 
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            text-align: left; 
+            font-size: 0.85em; /* Fuente más pequeña para ahorrar espacio */
+        }
+        th { 
+            background-color: #f2f2f2; 
+        } 
+
+        /* Estilo para el valor total */
+        #total-container {
+            font-size: 1.2em;
+            font-weight: bold;
+            text-align: right;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-bottom: 2px solid #ccc;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="auth-view">
-        <h2>Bienvenido a la App Gemini</h2>
+        <h2>Bienvenido a App Planillas</h2>
         <p id="message" style="color: red;"></p>
 
         <div id="register-form">
@@ -40,10 +113,38 @@
     </div>
 
     <div id="private-view" class="hidden">
-        <h2>🔒 Área Privada</h2>
-        <p>¡Hola! Has iniciado sesión con éxito.</p>
-        <p>Tu correo es: <strong id="user-email"></strong></p>
-        <button onclick="logoutUser()" style="background-color: #d9534f;">Cerrar Sesión</button>
+        <h2>🔒 Dashboard</h2>
+        <p>Usuario: <strong id="user-email"></strong></p>
+
+        <div class="card">
+            <h3>➕ Cargar Nueva Planilla</h3>
+            <input type="text" id="planilla-title" placeholder="Título (Ej: Venta Lunes)" required>
+            <input type="number" id="planilla-value" placeholder="Valor (Ej: 15000)" required>
+            <input type="date" id="planilla-date" required>
+            <button onclick="savePlanilla()" style="background-color: #007bff;">Guardar Planilla</button>
+        </div>
+
+        <div class="card">
+            <h3>📊 Mis Planillas</h3>
+            <div id="total-container">
+                Total Acumulado: $<span id="total-value">0</span>
+            </div>
+            
+            <table id="planillas-table">
+                <thead>
+                    <tr>
+                        <th>Título</th>
+                        <th>Valor</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="planillas-tbody">
+                    </tbody>
+            </table>
+            <p id="no-data-msg" style="text-align: center;">No hay planillas cargadas.</p>
+        </div>
+
+        <button onclick="logoutUser()" style="background-color: #d9534f; margin-top: 10px;">Cerrar Sesión</button>
     </div>
 </div>
 
