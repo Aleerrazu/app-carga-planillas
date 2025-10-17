@@ -1,0 +1,39 @@
+name: Despliegue Automático a GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  # Esto permite ejecutar el workflow manualmente si es necesario
+  workflow_dispatch: 
+
+# >>> ESTA SECCIÓN DEBE ESTAR AQUÍ, CON LA MISMA INDENTACIÓN QUE 'name' y 'on' <<<
+permissions:
+  contents: read  # Permite que el workflow lea tu código (index.html, app.js)
+  pages: write    # Permite que el workflow escriba los archivos de la página
+  id-token: write # Permite que el workflow se autentique para Pages (SOLUCIONA EL ERROR)
+
+# Define el trabajo de despliegue
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Aseguramos que solo se ejecute si la rama es 'main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Checkout del Repositorio
+        uses: actions/checkout@v4
+      
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Despliegue con GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.' 
+          
+      - name: Publicar GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
