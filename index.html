@@ -28,12 +28,12 @@
             border-radius: 8px; 
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
             width: 100%;
-            max-width: 600px;
+            max-width: 800px; /* Más ancho para la tabla de empleados */
             text-align: center; 
             box-sizing: border-box; 
         }
         
-        /* Estilos de inputs, select y botones */
+        /* Estilos generales de elementos */
         input, select, textarea, button { 
             width: 100%; 
             padding: 10px; 
@@ -71,19 +71,43 @@
             font-weight: bold;
             margin-bottom: 15px;
         }
-        .radio-group label {
-            display: block;
-            margin: 10px 0;
-            cursor: pointer;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background-color: #f9f9f9;
+
+        /* Estilos para la tabla de reporte mensual (empleado) */
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
         }
-        .radio-group input[type="radio"]:checked + label {
-            background-color: #2196f3;
-            color: white;
-            border-color: #2196f3;
+        .report-table th, .report-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        .report-table th {
+            background-color: #e9ecef;
+        }
+        .action-button {
+            width: auto;
+            padding: 5px 8px;
+            margin: 2px;
+            font-size: 1.1em;
+            border-radius: 50%;
+            line-height: 1;
+        }
+        .btn-check { background-color: #28a745; } /* Verde */
+        .btn-cross { background-color: #dc3545; } /* Rojo */
+        .btn-plus { background-color: #007bff; }  /* Azul */
+
+        .extra-input-row td {
+            background-color: #f1f8ff;
+            padding: 5px;
+        }
+        .extra-input-row input, .extra-input-row textarea {
+            width: calc(100% - 16px);
+            margin: 5px 0;
+            padding: 5px;
+            font-size: 0.9em;
         }
 
         /* Estilos para el área de administración */
@@ -92,9 +116,21 @@
             border-top: 2px dashed #ccc;
             padding-top: 20px;
         }
-        #export-button {
-            background-color: #007bff;
-            margin-bottom: 20px;
+        #employee-list-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        #employee-list-table th, #employee-list-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        #export-button, #admin-button-new-employee {
+             width: auto;
+             padding: 10px 15px;
+             margin-right: 10px;
         }
     </style>
 </head>
@@ -109,6 +145,7 @@
         <!-- Formularios de Auth -->
         <div id="register-form">
             <h3>Registrarse</h3>
+            <p>Necesario para que el Administrador asigne tu horario.</p>
             <input type="email" id="reg-email" placeholder="Correo Electrónico" required>
             <input type="password" id="reg-password" placeholder="Contraseña (mín. 6 caracteres)" required>
             <button onclick="registerUser()">Registrar</button>
@@ -123,53 +160,100 @@
         </div>
     </div>
 
-    <!-- VISTA PRIVADA (DASHBOARD DE EMPLEADO) -->
+    <!-- VISTA PRIVADA (DIVIDIDA ENTRE EMPLEADO Y ADMIN) -->
     <div id="private-view" class="hidden">
         <h2>Panel de Reporte Mensual</h2>
-        <p>Bienvenido/a: <strong id="employee-name">...</strong></p>
-        
-        <!-- Área de Referencia de Horario -->
-        <div class="info-box">
-            Tu horario habitual: <span id="horario-habitual-display">Cargando...</span>
+        <p>Bienvenido/a: <strong id="employee-name">...</strong> (<span id="user-email-display"></span>)</p>
+
+        <!-- 1. VISTA DE EMPLEADO (Reporte Mensual) -->
+        <div id="employee-dashboard">
+            <!-- Área de Referencia de Horario -->
+            <div class="info-box">
+                Tu horario habitual: <span id="horario-habitual-display">Cargando...</span> | Mes: <strong id="current-month-display"></strong>
+            </div>
+
+            <!-- Botón para días fuera del horario habitual (Extras) -->
+            <button onclick="showExtraDayForm()" style="background-color: #007bff; margin-bottom: 20px;">
+                ➕ Reportar Día Extra (Fin de semana, festivo, etc.)
+            </button>
+
+            <!-- Card para días Extra a reportar -->
+            <div class="card hidden" id="extra-day-form">
+                <h3>Reportar Día Extra</h3>
+                <input type="date" id="extra-report-date" required>
+                <input type="text" id="extra-horario-reportado" placeholder="Horario trabajado (Ej: 9:00 a 14:00)">
+                <textarea id="extra-comentarios" placeholder="Motivo del día extra"></textarea>
+                <button onclick="saveExtraDayTimeSheet()" style="background-color: #ffc107; color: black;">Guardar Día Extra</button>
+            </div>
+
+            <!-- Tabla Dinámica del Mes -->
+            <div class="card">
+                <h3>Jornadas del Mes</h3>
+                <p id="loading-report-msg">Generando calendario...</p>
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Día</th>
+                            <th>Horario Hab.</th>
+                            <th>Reporte</th>
+                        </tr>
+                    </thead>
+                    <tbody id="timesheet-body">
+                        <!-- Se llena con JavaScript -->
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <!-- CARD: Formulario de Reporte Diario -->
-        <div class="card">
-            <h3>📅 Reporte del Día</h3>
-            
-            <input type="date" id="report-date" required>
-            
-            <div class="radio-group">
-                <p style="font-weight: bold; margin-top: 15px;">¿Cómo fue tu jornada?</p>
-                
-                <input type="radio" id="type-habitual" name="report_type" value="HABITUAL" checked onchange="handleReportTypeChange()">
-                <label for="type-habitual">✅ Hice mi horario habitual</label>
 
-                <input type="radio" id="type-extra" name="report_type" value="EXTRA" onchange="handleReportTypeChange()">
-                <label for="type-extra">⏱️ Reportar horas/días extra</label>
-                
-                <input type="radio" id="type-falta" name="report_type" value="FALTA" onchange="handleReportTypeChange()">
-                <label for="type-falta">❌ Falté / Tuve Ausencia</label>
-            </div>
-            
-            <!-- Campo Oculto para Horario Reportado/Extra -->
-            <div id="extra-hours-section" class="hidden" style="margin-top: 10px;">
-                <p style="font-weight: bold; margin: 10px 0 5px;">Detalle de Horas Extra/Diferentes:</p>
-                <!-- Usamos un campo de texto simple para que el empleado escriba el horario -->
-                <input type="text" id="horario-reportado" placeholder="Ej: 08:00 a 19:00 (o 3 horas extra)">
-            </div>
-            
-            <!-- Campo Comentarios -->
-            <textarea id="comentarios" placeholder="Comentarios adicionales (permiso, motivo de falta, etc.)"></textarea>
-
-            <button onclick="saveTimeSheet()" style="background-color: #28a745;">💾 Guardar Reporte Diario</button>
-        </div>
-
-        <!-- Área de Administración (Visible solo para el admin: tu cuenta) -->
+        <!-- 2. VISTA DE ADMINISTRACIÓN (Gestión) -->
         <div id="admin-view" class="hidden">
             <h3>🛠️ Área de Administración</h3>
-            <p>Acceso total a todos los reportes de los empleados.</p>
-            <button onclick="exportToCsv()" id="export-button">⬇️ Exportar Todos los Datos a CSV (Excel)</button>
+            <p>Gestión de empleados, reportes y descarga de datos.</p>
+
+            <!-- Acciones de Admin -->
+            <div class="card">
+                <button onclick="showEmployeeManagement()" style="background-color: #6f42c1;" id="admin-button-manage-employees">
+                    👤 Gestionar Empleados
+                </button>
+                <button onclick="exportToCsv()" id="export-button" style="background-color: #007bff;">
+                    ⬇️ Descargar Todos los Reportes (CSV/Excel)
+                </button>
+            </div>
+
+            <!-- Subvista de Gestión de Empleados -->
+            <div class="card hidden" id="employee-management-view">
+                <h3>Gestión de Usuarios</h3>
+
+                <!-- Formulario para Nuevo Empleado / Blanqueo -->
+                <div class="card">
+                    <h4>➕ Crear/Blanquear Contraseña</h4>
+                    <input type="email" id="admin-employee-email" placeholder="Correo del empleado (para buscar o crear)" required>
+                    <input type="text" id="admin-employee-name" placeholder="Nombre completo (solo para nuevos empleados)">
+                    <input type="text" id="admin-employee-schedule" placeholder="Horario habitual (Ej: L-V 9:00 a 18:00)">
+                    <button onclick="adminCreateOrUpdateEmployee()" style="background-color: #28a745; margin-right: 5px;">Crear/Actualizar Empleado</button>
+                    <button onclick="adminResetPassword()" style="background-color: #ffc107; color: black;">Blanquear Contraseña</button>
+                    <p id="admin-action-message" style="margin-top: 10px;"></p>
+                </div>
+
+
+                <!-- Tabla de Empleados Registrados -->
+                <h4>Listado de Empleados</h4>
+                <p id="loading-employees-msg">Cargando listado...</p>
+                <table id="employee-list-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Horario</th>
+                            <th>Ver Reportes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employee-list-body">
+                        <!-- Llenado con JavaScript -->
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <button onclick="logoutUser()" style="background-color: #d9534f; margin-top: 10px;">Cerrar Sesión</button>
@@ -181,4 +265,5 @@
 
 </body>
 </html>
+
 
