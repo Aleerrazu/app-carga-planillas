@@ -570,3 +570,4 @@ auth.onAuthStateChanged((user) => {
         document.getElementById('register-form').classList.add('hidden');
     }
 });
+
