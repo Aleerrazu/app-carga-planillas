@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Planillas - Dashboard</title>
+    <title>Reporte de Horas Mensuales</title>
     
+    <!-- Incluye los SDKs de Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -15,37 +16,39 @@
             font-family: Arial, sans-serif; 
             display: flex; 
             justify-content: center; 
-            align-items: flex-start; /* Alinea arriba para evitar que el teclado oculte campos */
+            align-items: flex-start;
             min-height: 100vh; 
             background-color: #f4f4f4; 
             margin: 0; 
-            padding: 20px 10px; /* Padding reducido para móviles */
+            padding: 20px 10px;
         }
         .container { 
             background: white; 
             padding: 20px; 
             border-radius: 8px; 
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
-            width: 100%; /* Ocupa todo el ancho en móvil */
-            max-width: 600px; /* Ancho máximo para escritorio */
+            width: 100%;
+            max-width: 600px;
             text-align: center; 
             box-sizing: border-box; 
         }
         
-        /* Estilos de inputs y botones */
-        input, button { 
+        /* Estilos de inputs, select y botones */
+        input, select, textarea, button { 
             width: 100%; 
             padding: 10px; 
             margin: 8px 0; 
             border: 1px solid #ccc; 
             border-radius: 4px; 
             box-sizing: border-box; 
+            font-size: 1em;
         }
         button { 
             color: white; 
             border: none; 
             cursor: pointer; 
             background-color: #5cb85c; 
+            font-weight: bold;
         }
         button:hover { 
             opacity: 0.9; 
@@ -60,41 +63,50 @@
             text-align: left; 
             margin-bottom: 20px;
         }
-        
-        /* Estilos de Tabla (Clave para Mobile-First) */
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 10px; 
-        }
-        th, td { 
-            border: 1px solid #ddd; 
-            padding: 8px; 
-            text-align: left; 
-            font-size: 0.85em; /* Fuente más pequeña para ahorrar espacio */
-        }
-        th { 
-            background-color: #f2f2f2; 
-        } 
-
-        /* Estilo para el valor total */
-        #total-container {
-            font-size: 1.2em;
-            font-weight: bold;
-            text-align: right;
-            margin-bottom: 10px;
+        .info-box {
+            background-color: #e3f2fd; 
+            color: #1a237e; 
             padding: 10px;
-            border-bottom: 2px solid #ccc;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .radio-group label {
+            display: block;
+            margin: 10px 0;
+            cursor: pointer;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .radio-group input[type="radio"]:checked + label {
+            background-color: #2196f3;
+            color: white;
+            border-color: #2196f3;
+        }
+
+        /* Estilos para el área de administración */
+        #admin-view {
+            margin-top: 30px;
+            border-top: 2px dashed #ccc;
+            padding-top: 20px;
+        }
+        #export-button {
+            background-color: #007bff;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <!-- VISTA DE AUTENTICACIÓN (LOGIN/REGISTRO) -->
     <div id="auth-view">
-        <h2>Bienvenido a App Planillas</h2>
+        <h2>Reporte de Horas</h2>
         <p id="message" style="color: red;"></p>
 
+        <!-- Formularios de Auth (no cambia) -->
         <div id="register-form">
             <h3>Registrarse</h3>
             <input type="email" id="reg-email" placeholder="Correo Electrónico" required>
@@ -102,7 +114,6 @@
             <button onclick="registerUser()">Registrar</button>
             <p>¿Ya tienes cuenta? <a href="#" onclick="showLogin()">Inicia Sesión</a></p>
         </div>
-
         <div id="login-form" class="hidden">
             <h3>Iniciar Sesión</h3>
             <input type="email" id="log-email" placeholder="Correo Electrónico" required>
@@ -112,42 +123,60 @@
         </div>
     </div>
 
+    <!-- VISTA PRIVADA (DASHBOARD DE EMPLEADO) -->
     <div id="private-view" class="hidden">
-        <h2>🔒 Dashboard</h2>
-        <p>Usuario: <strong id="user-email"></strong></p>
-
-        <div class="card">
-            <h3>➕ Cargar Nueva Planilla</h3>
-            <input type="text" id="planilla-title" placeholder="Título (Ej: Venta Lunes)" required>
-            <input type="number" id="planilla-value" placeholder="Valor (Ej: 15000)" required>
-            <input type="date" id="planilla-date" required>
-            <button onclick="savePlanilla()" style="background-color: #007bff;">Guardar Planilla</button>
+        <h2>Panel de Reporte Mensual</h2>
+        <p>Bienvenido/a: <strong id="employee-name">...</strong></p>
+        
+        <!-- Área de Referencia de Horario -->
+        <div class="info-box">
+            Tu horario habitual: <span id="horario-habitual-display">Cargando...</span>
         </div>
 
+        <!-- CARD: Formulario de Reporte Diario -->
         <div class="card">
-            <h3>📊 Mis Planillas</h3>
-            <div id="total-container">
-                Total Acumulado: $<span id="total-value">0</span>
+            <h3>📅 Reporte del Día</h3>
+            
+            <input type="date" id="report-date" required>
+            
+            <div class="radio-group">
+                <p style="font-weight: bold; margin-top: 15px;">¿Cómo fue tu jornada?</p>
+                
+                <input type="radio" id="type-habitual" name="report_type" value="HABITUAL" checked>
+                <label for="type-habitual">✅ Hice mi horario habitual</label>
+
+                <input type="radio" id="type-extra" name="report_type" value="EXTRA">
+                <label for="type-extra">⏱️ Reportar horas/días extra</label>
+                
+                <input type="radio" id="type-falta" name="report_type" value="FALTA">
+                <label for="type-falta">❌ Falté / Tuve Ausencia</label>
             </div>
             
-            <table id="planillas-table">
-                <thead>
-                    <tr>
-                        <th>Título</th>
-                        <th>Valor</th>
-                        <th>Fecha</th>
-                    </tr>
-                </thead>
-                <tbody id="planillas-tbody">
-                    </tbody>
-            </table>
-            <p id="no-data-msg" style="text-align: center;">No hay planillas cargadas.</p>
+            <!-- Campo Oculto para Horario Reportado/Extra -->
+            <div id="extra-hours-section" class="hidden" style="margin-top: 10px;">
+                <p style="font-weight: bold; margin: 10px 0 5px;">Detalle de Horas Extra/Diferentes:</p>
+                <!-- Usamos un campo de texto simple para que el empleado escriba el horario -->
+                <input type="text" id="horario-reportado" placeholder="Ej: 08:00 a 19:00 (o 3 horas extra)">
+            </div>
+            
+            <!-- Campo Comentarios -->
+            <textarea id="comentarios" placeholder="Comentarios adicionales (permiso, motivo de falta, etc.)"></textarea>
+
+            <button onclick="saveTimeSheet()" style="background-color: #28a745;">💾 Guardar Reporte Diario</button>
+        </div>
+
+        <!-- Área de Administración (Visible solo para el admin: tu cuenta) -->
+        <div id="admin-view" class="hidden">
+            <h3>🛠️ Área de Administración</h3>
+            <p>Acceso total a todos los reportes de los empleados.</p>
+            <button onclick="exportToCsv()" id="export-button">⬇️ Exportar Todos los Datos a CSV (Excel)</button>
         </div>
 
         <button onclick="logoutUser()" style="background-color: #d9534f; margin-top: 10px;">Cerrar Sesión</button>
     </div>
 </div>
 
+<!-- Enlace al archivo de lógica -->
 <script src="app.js"></script>
 
 </body>

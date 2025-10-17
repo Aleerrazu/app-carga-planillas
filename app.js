@@ -9,25 +9,31 @@ const firebaseConfig = {
 
 // ---------------------------------------------
 
-// Inicializa Firebase y Servicios
+// =======================================================
+// === INICIALIZACIÓN Y REFERENCIAS ======================
+// =======================================================
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.firestore(); // Inicialización de Firestore
+const db = firebase.firestore();
 
-// Referencias a elementos del DOM
+// Referencias del DOM
 const messageEl = document.getElementById('message');
 const authView = document.getElementById('auth-view');
 const privateView = document.getElementById('private-view');
-const userEmailEl = document.getElementById('user-email');
-const loginForm = document.getElementById('login-form');
-const registerForm = document.getElementById('register-form');
-const planillasTbody = document.getElementById('planillas-tbody'); // Cuerpo de la tabla
-const totalValueEl = document.getElementById('total-value');     // Valor total
-const noDataMsg = document.getElementById('no-data-msg');         // Mensaje sin datos
+const employeeNameEl = document.getElementById('employee-name');
+const horarioHabitualDisplayEl = document.getElementById('horario-habitual-display');
+const extraHoursSectionEl = document.getElementById('extra-hours-section');
+const horarioReportadoEl = document.getElementById('horario-reportado');
+const adminViewEl = document.getElementById('admin-view');
+
+// ID de usuario Administrador (DEBES REEMPLAZAR ESTO CON TU PROPIO UID)
+// Puedes obtener tu UID en Firebase Auth. Úsalo para acceder a la función de exportación.
+const ADMIN_UID = "REEMPLAZA_ESTO_CON_TU_UID_DE_ADMIN"; 
 
 
 // =======================================================
-// === FUNCIONES DE INTERFAZ Y UTILIDADES ================
+// === INTERFAZ Y UTILIDADES =============================
 // =======================================================
 
 function showMessage(msg, isError = true) {
@@ -35,148 +41,168 @@ function showMessage(msg, isError = true) {
     messageEl.style.color = isError ? 'red' : 'green';
 }
 
-function showLogin() {
-    loginForm.classList.remove('hidden');
-    registerForm.classList.add('hidden');
-    messageEl.textContent = '';
-}
+// Escucha los cambios en los radio buttons para mostrar/ocultar el campo de detalle
+document.querySelectorAll('input[name="report_type"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        const selectedType = document.querySelector('input[name="report_type"]:checked').value;
+        if (selectedType === 'EXTRA' || selectedType === 'FALTA') {
+            extraHoursSectionEl.classList.remove('hidden');
+            horarioReportadoEl.placeholder = (selectedType === 'EXTRA') 
+                ? "Ej: 08:00 a 19:00, 3 horas extra, etc." 
+                : "Ej: Ausencia médica, Salí a las 15:00, etc.";
+        } else {
+            extraHoursSectionEl.classList.add('hidden');
+        }
+    });
+});
 
-function showRegister() {
-    registerForm.classList.remove('hidden');
-    loginForm.classList.add('hidden');
-    messageEl.textContent = '';
+// =======================================================
+// === FUNCIÓN DE CARGA DE DATOS DEL EMPLEADO ============
+// =======================================================
+
+function loadEmployeeConfig(user) {
+    // 1. Cargar datos de configuración (Nombre y Horario Habitual)
+    db.collection("employee_config").where("userId", "==", user.uid).get()
+        .then(snapshot => {
+            if (snapshot.empty) {
+                employeeNameEl.textContent = 'Usuario sin configurar';
+                horarioHabitualDisplayEl.textContent = 'Horario no asignado. Contacte a RRHH.';
+                showMessage('⚠️ Tu usuario aún no está configurado por el administrador.', true);
+                return;
+            }
+            const config = snapshot.docs[0].data();
+            employeeNameEl.textContent = config.nombre;
+            horarioHabitualDisplayEl.textContent = config.horarioHabitual;
+
+            // 2. Mostrar la sección de administrador si el UID coincide
+            if (user.uid === ADMIN_UID) {
+                adminViewEl.classList.remove('hidden');
+            } else {
+                adminViewEl.classList.add('hidden');
+            }
+        })
+        .catch(error => {
+            console.error("Error al cargar config: ", error);
+            showMessage('Error al cargar la configuración del empleado.', true);
+        });
 }
 
 
 // =======================================================
-// === LÓGICA DE AUTENTICACIÓN (LOGIN/LOGOUT) ============
+// === LÓGICA PRINCIPAL: GUARDAR REPORTE =================
 // =======================================================
 
-function registerUser() {
-    const email = document.getElementById('reg-email').value;
-    const password = document.getElementById('reg-password').value;
+function saveTimeSheet() {
+    const reportDate = document.getElementById('report-date').value;
+    const reportType = document.querySelector('input[name="report_type"]:checked').value;
+    const comentarios = document.getElementById('comentarios').value;
+    const horarioReportado = (reportType === 'EXTRA' || reportType === 'FALTA') 
+                             ? horarioReportadoEl.value 
+                             : '';
+    const userUID = auth.currentUser.uid;
     
-    auth.createUserWithEmailAndPassword(email, password)
-        .then(() => {
-            showMessage("✅ Registro exitoso.", false);
-        })
-        .catch((error) => {
-            showMessage(`Error de Registro: ${error.message}`);
-        });
-}
-
-function loginUser() {
-    const email = document.getElementById('log-email').value;
-    const password = document.getElementById('log-password').value;
+    // Generar la clave de mes y año para agrupar (Ej: 2025-10)
+    const monthYear = reportDate.substring(0, 7); 
     
-    auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-            showMessage("✅ Inicio de sesión exitoso.", false);
-        })
-        .catch((error) => {
-            showMessage(`Error de Login: ${error.message}`);
-        });
-}
-
-function logoutUser() {
-    auth.signOut()
-        .then(() => {
-            showMessage("Sesión cerrada. Vuelve pronto.", false);
-        })
-        .catch((error) => {
-            showMessage(`Error al cerrar sesión: ${error.message}`);
-        });
-}
-
-
-// =======================================================
-// === LÓGICA DE FIRESTORE (GUARDAR Y LEER DATOS) ========
-// =======================================================
-
-function savePlanilla() {
-    const title = document.getElementById('planilla-title').value;
-    const value = parseFloat(document.getElementById('planilla-value').value);
-    const date = document.getElementById('planilla-date').value;
-    const userUID = auth.currentUser.uid; 
-
-    if (!title || isNaN(value) || !date) {
-        showMessage("Por favor, completa todos los campos con valores válidos.", true);
+    if (!reportDate) {
+        showMessage("Por favor, selecciona la fecha del reporte.", true);
+        return;
+    }
+    if ((reportType === 'EXTRA' || reportType === 'FALTA') && !horarioReportado) {
+        showMessage("Por favor, detalla las horas/motivo en la sección de Comentarios/Horario Reportado.", true);
         return;
     }
 
-    const planillaData = {
-        title: title,
-        value: value,
-        date: date,
-        userId: userUID, 
+    const reportData = {
+        userId: userUID,
+        email: auth.currentUser.email,
+        nombre: employeeNameEl.textContent, // Usamos el nombre cargado de la configuración
+        mesAnio: monthYear,
+        fecha: reportDate,
+        tipoReporte: reportType,
+        horarioReportado: horarioReportado,
+        comentarios: comentarios,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     };
-
-    db.collection("planillas").add(planillaData)
-        .then(() => {
-            showMessage("✅ Planilla guardada con éxito.", false);
-            // Limpiar formulario
-            document.getElementById('planilla-title').value = '';
-            document.getElementById('planilla-value').value = '';
-            document.getElementById('planilla-date').value = '';
+    
+    // Comprobar si ya existe un reporte para esa fecha
+    db.collection("timesheets")
+        .where("userId", "==", userUID)
+        .where("fecha", "==", reportDate)
+        .get()
+        .then(snapshot => {
+            if (!snapshot.empty) {
+                showMessage(`Ya existe un reporte para el ${reportDate}. Borra el anterior si deseas cambiarlo.`, true);
+                return;
+            }
             
-            // Recargar la lista de datos
-            loadPlanillas(userUID); 
-        })
-        .catch((error) => {
-            showMessage(`Error al guardar: ${error.message}`, true);
+            // Si no existe, guardar el nuevo reporte
+            db.collection("timesheets").add(reportData)
+                .then(() => {
+                    showMessage("✅ Reporte diario guardado con éxito.", false);
+                    document.getElementById('comentarios').value = '';
+                    horarioReportadoEl.value = '';
+                })
+                .catch((error) => {
+                    showMessage(`Error al guardar: ${error.message}`, true);
+                });
         });
 }
 
-// FUNCIÓN CLAVE: Leer los datos del usuario actual desde Firestore
-function loadPlanillas(userId) {
-    // 1. Ocultar la tabla y mostrar mensaje de carga
-    planillasTbody.innerHTML = '';
-    noDataMsg.textContent = 'Cargando datos...';
-    noDataMsg.classList.remove('hidden');
+// =======================================================
+// === FUNCIÓN DE ADMINISTRACIÓN: EXPORTAR A CSV (EXCEL) =
+// =======================================================
 
-    let total = 0;
+function exportToCsv() {
+    showMessage("Cargando todos los reportes, espera un momento...", false);
     
-    // 2. Consulta a Firestore: trae todos los documentos donde userId coincida
-    db.collection("planillas")
-      .where("userId", "==", userId)
-      .orderBy("date", "desc") // Ordena por fecha más reciente primero
-      .get()
-      .then((querySnapshot) => {
-          
-          if (querySnapshot.empty) {
-              noDataMsg.textContent = 'No hay planillas cargadas.';
-              totalValueEl.textContent = '0';
-              return;
-          }
+    db.collection("timesheets").get()
+        .then((querySnapshot) => {
+            if (querySnapshot.empty) {
+                showMessage("No hay datos para exportar.", true);
+                return;
+            }
+            
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            // 1. Encabezados (Headers)
+            const headers = ['Nombre', 'Email', 'Fecha', 'Mes_Anio', 'Tipo_Reporte', 'Detalle_Horario', 'Comentarios', 'ID_Empleado'];
+            csvContent += headers.join(";") + "\n"; // Usamos ; como separador para Excel
+            
+            // 2. Datos
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                
+                // Extraer los campos en el orden de los headers, manejando valores nulos
+                const row = [
+                    data.nombre || '',
+                    data.email || '',
+                    data.fecha || '',
+                    data.mesAnio || '',
+                    data.tipoReporte || '',
+                    (data.horarioReportado || '').replace(/[,;]/g, ' '), // Limpiar comas/puntos y comas
+                    (data.comentarios || '').replace(/[,;]/g, ' '),
+                    data.userId || ''
+                ];
+                
+                csvContent += row.join(";") + "\n";
+            });
 
-          noDataMsg.classList.add('hidden');
-          
-          querySnapshot.forEach((doc) => {
-              const data = doc.data();
-              total += data.value;
-              
-              // 3. Crea la fila de la tabla (Mobile-First)
-              const row = planillasTbody.insertRow();
-              
-              const titleCell = row.insertCell(0);
-              titleCell.textContent = data.title;
-              
-              const valueCell = row.insertCell(1);
-              // Formatea el valor como moneda
-              valueCell.textContent = `$${data.value.toLocaleString('es-AR')}`; 
-              
-              const dateCell = row.insertCell(2);
-              dateCell.textContent = data.date; // La fecha ya viene formateada por el input
-          });
-          
-          // 4. Actualiza el total acumulado
-          totalValueEl.textContent = `$${total.toLocaleString('es-AR')}`;
-      })
-      .catch((error) => {
-          console.error("Error al cargar planillas: ", error);
-          noDataMsg.textContent = 'Error al cargar los datos.';
-      });
+            // 3. Crear y descargar el archivo CSV
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Reporte_Horas_Total_${new Date().toISOString().substring(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showMessage("✅ Exportación completa. Revisa tu carpeta de descargas.", false);
+        })
+        .catch(error => {
+            showMessage(`Error al exportar: ${error.message}`, true);
+            console.error("Error al exportar a CSV: ", error);
+        });
 }
 
 
@@ -189,13 +215,17 @@ auth.onAuthStateChanged((user) => {
         // Usuario logueado: Muestra la vista privada
         authView.classList.add('hidden');
         privateView.classList.remove('hidden');
-        userEmailEl.textContent = user.email;
-        loadPlanillas(user.uid); // <-- CARGA LOS DATOS AL INICIAR SESIÓN
+        
+        // Cargar configuración del empleado al iniciar sesión
+        loadEmployeeConfig(user); 
+        
         showMessage('');
     } else {
         // Usuario no logueado: Muestra la vista de autenticación
         authView.classList.remove('hidden');
         privateView.classList.add('hidden');
-        showRegister();
+        // Aseguramos que solo muestre login/registro y no el error de guardado
+        document.getElementById('login-form').classList.remove('hidden');
+        document.getElementById('register-form').classList.add('hidden');
     }
 });
