@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Control Horario – Panel</title>
+  <!-- Cache busting duro -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
   <style>
     :root{ --bg:#0f172a; --card:#111827; --muted:#1f2937; --accent:#6366f1;
            --good:#16a34a; --bad:#dc2626; --text:#e5e7eb; --textmuted:#94a3b8; --chip:#334155; --blue:#2563eb; }
@@ -35,13 +39,16 @@
     .trash{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;cursor:pointer}
     .stack{display:flex;flex-direction:column;gap:4px} .tag{display:inline-block;background:#0b1223;border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:12px}
   </style>
+  <script>
+    window.__APP_VERSION = "v2025.10.18-1715-53 UTC";
+  </script>
 </head>
 <body>
   <div class="wrap">
     <div class="brand">
       <div class="dot"></div>
       <div class="title">Control Horario · Panel</div>
-      <div class="chip" id="version-chip">v2025.10.18-1653 UTC</div>
+      <div class="chip" id="version-chip">v2025.10.18-1715-53 UTC</div>
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
       <button class="btn small" id="logout-btn" type="button">Salir</button>
@@ -98,7 +105,7 @@
           <div class="pad" style="padding-top:0">
             <table>
               <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
-              <tbody id="rows"></tbody>
+            <tbody id="rows"></tbody>
             </table>
           </div>
         </div>
@@ -127,7 +134,32 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- App con cache-buster -->
-  <script src="app.js?v=v2025.10.18-1653 UTC"></script>
+  <!-- App con cache-buster Fuerte -->
+  <script>var __BUST="20251018171553-"+Math.random().toString(36).slice(2);</script>
+  <script src="app.js?v=20251018171553"></script>
+
+  <!-- Fallback doLogin si app.js no lo definió -->
+  <script>
+    if (typeof window.doLogin !== 'function') {
+      console.warn('Fallback doLogin activo');
+      window.doLogin = function() {
+        const btn = document.getElementById('login-btn');
+        const msg = document.getElementById('auth-msg');
+        const email = (document.getElementById('email')?.value || '').trim();
+        const pass  = (document.getElementById('password')?.value || '');
+        if (!window.firebase || !firebase.auth) {
+          msg.textContent = 'Firebase no está listo (revisá los <script> de Firebase).';
+          msg.style.color = '#fecaca';
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Ingresando...';
+        firebase.auth().signInWithEmailAndPassword(email, pass)
+          .then(() => { msg.textContent = 'Ingreso correcto'; msg.style.color = '#86efac'; })
+          .catch(e => { console.error(e); msg.textContent = e?.message || 'No se pudo ingresar'; msg.style.color = '#fecaca'; })
+          .finally(() => { btn.disabled = false; btn.textContent = 'Entrar'; });
+      };
+    }
+  </script>
 </body>
 </html>

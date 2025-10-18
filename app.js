@@ -1,4 +1,7 @@
 (function(){
+  // ===== Versión embebida (para ver rápido en el chip) =====
+  try { if (document.getElementById('version-chip')) { document.getElementById('version-chip').textContent = window.__APP_VERSION || 'v-dev'; } } catch(e){}
+
   // ================= Firebase =================
   var firebaseConfig = {
     apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
@@ -114,7 +117,7 @@
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML='<td>Extra</td>'+
                   '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'+
-                  '<td id="hrsEx-'+ds}" class="muted">—</td>'+
+                  '<td id="hrsEx-'+ds+'" class="muted">—</td>'+
                   '<td class="icon-row"><button class="btn small" id="saveEx-'+ds+'">Guardar</button><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'+
                   '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
     if(locked){ var s1=sub.querySelector('#saveEx-'+ds), s2=sub.querySelector('#rmEx-'+ds); if(s1) s1.disabled=true; if(s2) s2.disabled=true; }
@@ -184,7 +187,7 @@
     var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
     if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
     return getConfig(user.uid).then(function(cfg){
-      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
+      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
         .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
     });
   }
