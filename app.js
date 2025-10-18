@@ -80,7 +80,8 @@
   function setRowState(ds, st){ var r=$('row-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
 
   function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
-    var tr=document.createElement('tr'); tr.id='row-'+ds;
+    // Fila Principal: DÍA, HORARIO HABITUAL, HS TRABAJADAS
+    var trMain=document.createElement('tr'); trMain.id='row-'+ds; // Mantengo el ID original para compatibilidad con rowState
 
     var td1=document.createElement('td'); 
     var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
@@ -102,7 +103,22 @@
     td3.className='stack muted'; 
     td3.innerHTML='<span class="tag">—</span>';
 
-    var td4=document.createElement('td'); 
+    // Se agregan celdas vacías para mantener la estructura de 5 columnas en la fila principal
+    trMain.appendChild(td1); 
+    trMain.appendChild(td2); 
+    trMain.appendChild(td3); 
+    trMain.appendChild(document.createElement('td')); // Vacío para ACCIONES
+    trMain.appendChild(document.createElement('td')); // Vacío para COMENTARIO
+
+    // Fila de Acciones/Comentario: Esta es la nueva fila que contendrá los elementos "abajo"
+    var trActions=document.createElement('tr'); trActions.id='actions-'+ds; trActions.className='subrow';
+
+    // CELDAS VACÍAS PARA ALINEACIÓN (CRÍTICO)
+    trActions.appendChild(document.createElement('td')); // Vacío para DÍA
+    trActions.appendChild(document.createElement('td')); // Vacío para HORARIO HABITUAL
+    trActions.appendChild(document.createElement('td')); // Vacío para HS TRABAJADAS
+
+    var td4=document.createElement('td'); // ACCIONES
     td4.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
     var ab=document.createElement('button'); ab.id='ab-'+ds; ab.className='icon bad'; ab.textContent='✕'; if(locked||isOffExtraOnly) ab.disabled=true;
@@ -118,12 +134,14 @@
       });
     }
 
-    var td5=document.createElement('td'); 
+    var td5=document.createElement('td'); // COMENTARIO
     var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
     td5.appendChild(cm);
+    
+    trActions.appendChild(td4); 
+    trActions.appendChild(td5);
 
-    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
-
+    // Fila de Extra: Se mantiene oculta por defecto
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML= ''
       + '<td>Extra</td>'
@@ -146,24 +164,25 @@
       if(existing.tipoReporte==='MIXTO'){ st.ok=true; st.ex=true; var parts=(existing.horarioReportado||"").split('+'); st.extraHours=(parts[1]||"").trim(); }
     }
     setRowState(ds, st);
-    return [tr, sub];
+    return [trMain, trActions, sub]; // Devuelve 3 filas
   }
 
   function applyStateToUI(ds, habitual, variable){
     var st=rowState(ds);
     var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds);
     var hrsEx = document.getElementById('hrsEx-'+ds) || null;
+    var trExtra=$('sub-'+ds); // Fila de Extra
 
     if(ok) ok.classList.toggle('active', !!st.ok);
     if(ab) ab.classList.toggle('active', !!st.ab);
     if(exb) exb.classList.toggle('active', !!st.ex);
+    
+    // Control de visibilidad de la fila de extra
+    if(trExtra) trExtra.classList.toggle('hidden', !st.ex);
+
     if(exInput && st.extraHours) exInput.value = st.extraHours;
     if($('cmEx-'+ds) && st.cmExtra) $('cmEx-'+ds).value = st.cmExtra;
 
-    // Control de visibilidad de la fila de extra (Aseguramos que 'sub-'+ds se oculte/muestre)
-    var trExtra=$('sub-'+ds); 
-    if(trExtra) trExtra.classList.toggle('hidden', !st.ex);
-    
     var hrsMain=$('hrs-'+ds); if(!hrsMain) return;
     hrsMain.innerHTML='';
     if(st.ab){
@@ -227,12 +246,15 @@
         var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
         if(info.skip && !hasExisting) continue;
         var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
-        var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
+        var trMain=built[0], trActions=built[1], trSub=built[2]; 
+        rows.appendChild(trMain); 
+        rows.appendChild(trActions);
+        rows.appendChild(trSub);
         (function(ds,info){
           var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
           if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
+          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); }); 
           applyStateToUI(ds,info.text,info.variable);
           if(existing[ds]){
             var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
@@ -262,11 +284,12 @@
       var date=new Date(dateStr);
       var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
       
-      // Eliminar las 2 filas existentes para el día
-      var existingTr=$('row-'+dateStr); 
-      if(existingTr){ 
-        if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); 
-        existingTr.remove(); 
+      // Eliminar las 3 filas existentes para el día
+      var existingTrMain=$('row-'+dateStr); 
+      if(existingTrMain){ 
+        if(existingTrMain.nextSibling) existingTrMain.nextSibling.remove(); 
+        if(existingTrMain.nextSibling) existingTrMain.nextSibling.remove(); 
+        existingTrMain.remove(); 
       }
       
       var built=buildRow(dateStr, date, info.text, info.variable, lock.locked, report, info.skip && report && report.tipoReporte==='EXTRA');
@@ -275,11 +298,13 @@
       for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-',''); if(ds>dateStr){ 
         rows.insertBefore(built[0], days[i]); 
         rows.insertBefore(built[1], days[i]); 
+        rows.insertBefore(built[2], days[i]); 
         inserted=true; break; 
       } }
       if(!inserted){ 
         rows.appendChild(built[0]); 
         rows.appendChild(built[1]); 
+        rows.appendChild(built[2]); 
       }
       applyStateToUI(dateStr, info.text, info.variable);
     });
@@ -426,9 +451,10 @@
     return /\bicon\b/.test(c) || /\bgood\b/.test(c) || /\bbad\b/.test(c) || /\bblue\b/.test(c);
   }
   function fixRow(tr){
-    if(!tr || !tr.id || !tr.id.startsWith('row-')) return; // Solo filas principales
+    if(!tr || !tr.id || !tr.id.startsWith('actions-')) return; // Solo filas de acciones
+    
     var cells = tr.children; if(!cells || cells.length<5) return;
-    var tdHs=cells[2], tdActs=cells[3], tdCom=cells[4];
+    var tdActs=cells[3], tdCom=cells[4]; 
 
     // Move action buttons into tdActs
     toArray(tr.querySelectorAll('button')).forEach(function(b){
@@ -438,19 +464,27 @@
     });
     if(tdActs && !tdActs.classList.contains('icon-row')) tdActs.classList.add('icon-row');
 
-    // Ensure hs cell only has chips (remove buttons/inputs)
-    toArray(tdHs.querySelectorAll('button,input,textarea,select')).forEach(function(el){
-      try{ el.remove(); }catch(e){}
-    });
-
-    // Move comment input to tdCom
+    // Mover el campo de comentario al tdCom (aunque ya debería estar ahí)
     var cm = tr.querySelector('input[id^="cm-"], textarea[id^="cm-"]') || tr.querySelector('input[placeholder*="oment"], textarea[placeholder*="oment"]');
     if(cm && cm.parentElement !== tdCom){
       try{ tdCom.innerHTML=''; tdCom.appendChild(cm); }catch(e){}
     }
+    
+    // Limpieza de la fila principal (row-)
+    var mainRowId = tr.id.replace('actions-', 'row-');
+    var mainRow = document.getElementById(mainRowId);
+    if (mainRow) {
+      var tdHs = mainRow.children[2];
+      if(tdHs) {
+        toArray(tdHs.querySelectorAll('button,input,textarea,select')).forEach(function(el){
+          try{ el.remove(); }catch(e){}
+        });
+      }
+    }
   }
   function sweep(){
-    var rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
+    // Buscamos solo las filas de acciones/comentario
+    var rows = document.querySelectorAll('tbody#rows tr[id^="actions-"]');
     rows.forEach(fixRow);
   }
   // Initial sweeps
@@ -468,6 +502,4 @@
     mo.observe(tgt, {childList:true, subtree:false});
   }
 })();
-// --- end universal column aligner ---
-
-// vfix-2025.10.18-220505-single-row-fixed
+// vfix-2025.10.18-220505-double-row-fixed
