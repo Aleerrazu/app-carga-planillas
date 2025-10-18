@@ -1,4 +1,4 @@
-// ======= Firebase config (igual que el tuyo) =======
+// ===================== Firebase =====================
 const firebaseConfig = {
   apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
   authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
@@ -7,430 +7,306 @@ const firebaseConfig = {
   messagingSenderId: "447263250565",
   appId: "1:447263250565:web:6704994cbfbfe7c98b31ec"
 };
-
-// =======================================================
-// === INICIALIZACIÓN Y REFERENCIAS ======================
-// =======================================================
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Referencias del DOM
-const messageEl = document.getElementById('message');
-const authView = document.getElementById('auth-view');
-const privateView = document.getElementById('private-view');
-const employeeNameEl = document.getElementById('employee-name');
-const horarioHabitualDisplayEl = document.getElementById('horario-habitual-display');
-const adminViewEl = document.getElementById('admin-view');
-const timesheetBodyEl = document.getElementById('timesheet-body');
-const extraDayFormEl = document.getElementById('extra-day-form');
-const employeeListBodyEl = document.getElementById('employee-list-body');
-const employeeManagementViewEl = document.getElementById('employee-management-view');
-const adminActionMessageEl = document.getElementById('admin-action-message');
+// ============ Utilidades UI ============
+const $ = (id)=>document.getElementById(id);
+function setMsg(el, text, good=false){ el.textContent=text; el.style.color = good?'#86efac':'#fecaca';}
+function fmtDate(d){ return d.toISOString().split('T')[0]; }
+function monthKey(date=new Date()){ return date.toISOString().slice(0,7); } // YYYY-MM
+function todayStr(){ return fmtDate(new Date()); }
+function setChip(id, val){ $(id).textContent = val; }
 
-// Estado global
-let employeeConfig = null;
-const currentMonth = new Date().toISOString().substring(0, 7); // Ej: 2025-10
-document.getElementById('current-month-display').textContent = currentMonth;
+// ============ Elementos ============
+const authCard = $("auth-card");
+const appCard  = $("app-card");
+const segEmp   = $("seg-employee");
+const segAdm   = $("seg-admin");
+const empView  = $("employee-view");
+const admView  = $("admin-view");
+const tblBody  = $("tbl-body");
 
-// ⚠️ COMPLETAR CON TU UID REAL DE ADMIN (después de loguearte, mirá la consola)
-const ADMIN_UID = "REEMPLAZA_ESTO_CON_TU_UID_DE_ADMIN";
+// login widgets
+$("tab-login").onclick = ()=>{ $("tab-login").classList.add('active'); $("tab-register").classList.remove('active'); }
+$("tab-register").onclick = ()=>{ $("tab-register").classList.add('active'); $("tab-login").classList.remove('active'); }
 
-// =======================================================
-// === UI helpers / Auth (Login/Registro) ================
-// =======================================================
-function showMessage(msg, isError = true) {
-  messageEl.textContent = msg;
-  messageEl.style.color = isError ? 'red' : 'green';
-}
-function showLogin() {
-  document.getElementById('login-form').classList.remove('hidden');
-  document.getElementById('register-form').classList.add('hidden');
-  messageEl.textContent = '';
-}
-function showRegister() {
-  document.getElementById('register-form').classList.remove('hidden');
-  document.getElementById('login-form').classList.add('hidden');
-  messageEl.textContent = '';
-}
-function registerUser() {
-  const email = document.getElementById('reg-email').value;
-  const password = document.getElementById('reg-password').value;
-  auth.createUserWithEmailAndPassword(email, password)
-    .then(() => showMessage("✅ Registro exitoso.", false))
-    .catch((error) => showMessage(`Error de Registro: ${error.message}`));
-}
-function loginUser() {
-  const email = document.getElementById('log-email').value;
-  const password = document.getElementById('log-password').value;
-  auth.signInWithEmailAndPassword(email, password)
-    .then(() => showMessage("✅ Inicio de sesión exitoso.", false))
-    .catch((error) => showMessage(`Error de Login: ${error.message}`));
-}
-function logoutUser() {
-  auth.signOut()
-    .then(() => showMessage("Sesión cerrada. Vuelve pronto.", false))
-    .catch((error) => showMessage(`Error al cerrar sesión: ${error.message}`));
+$("login-btn").onclick = async ()=>{
+  try{ await auth.signInWithEmailAndPassword($("email").value, $("password").value);
+    setMsg($("auth-msg"), "Ingreso correcto", true);
+  }catch(e){ setMsg($("auth-msg"), e.message); }
+};
+$("register-btn").onclick = async ()=>{
+  try{ await auth.createUserWithEmailAndPassword($("email").value, $("password").value);
+    setMsg($("auth-msg"), "Cuenta creada. Ya podés ingresar.", true);
+  }catch(e){ setMsg($("auth-msg"), e.message); }
+};
+$("reset-btn").onclick = async ()=>{
+  try{ await auth.sendPasswordResetEmail($("email").value);
+    setMsg($("auth-msg"), "Te enviamos un mail para blanquear.", true);
+  }catch(e){ setMsg($("auth-msg"), e.message); }
+};
+$("logout-btn").onclick = ()=>auth.signOut();
+
+// Switch Admin/Empleado (solo visual; la habilitación real depende del rol)
+segEmp.onclick = ()=>{ segEmp.classList.add("active"); segAdm.classList.remove("active"); empView.classList.remove("hidden"); admView.classList.add("hidden"); };
+segAdm.onclick = ()=>{ segAdm.classList.add("active"); segEmp.classList.remove("active"); empView.classList.add("hidden"); admView.classList.remove("hidden"); };
+
+// ============ Roles ============
+// 1) Lista rápida por email (editá esto si querés)
+const ADMIN_EMAILS = []; // ej: ["ale@hua.com"]
+// 2) O bien, un doc en Firestore: roles/{uid} { role: "admin" | "employee" }
+
+async function resolveRole(user){
+  if(ADMIN_EMAILS.includes(user.email)) return "admin";
+  try{
+    const r = await db.collection("roles").doc(user.uid).get();
+    if(r.exists && r.data().role === "admin") return "admin";
+  }catch(_){}
+  return "employee";
 }
 
-// =======================================================
-// === ADMIN (gestión) ===================================
-// =======================================================
-function showEmployeeManagement() {
-  employeeManagementViewEl.classList.toggle('hidden');
-  if (!employeeManagementViewEl.classList.contains('hidden')) {
-    loadEmployeeList();
+// ============ Empleado ============
+async function loadEmployeeConfig(uid){
+  const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
+  if(q.empty) return null;
+  return q.docs[0].data();
+}
+
+async function loadLock(uid, ym){
+  const doc = await db.collection("locks").doc(`${uid}_${ym}`).get();
+  return doc.exists ? doc.data() : { locked:false, lastSubmitted:null };
+}
+async function setLock(uid, ym, locked){
+  await db.collection("locks").doc(`${uid}_${ym}`).set({ locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null }, { merge:true });
+}
+
+function renderDays(habitual){
+  tblBody.innerHTML = "";
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const days = new Date(y, m+1, 0).getDate();
+  const today = todayStr();
+  for(let d=1; d<=days; d++){
+    const date = new Date(y,m,d);
+    const ds = fmtDate(date);
+    const dow = date.toLocaleDateString('es-AR',{weekday:'short'});
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><b>${String(d).padStart(2,'0')}</b> <span class="muted">(${dow})</span></td>
+                    <td>${habitual||"—"}</td>
+                    <td id="cell-${ds}"><span class="muted">—</span></td>`;
+    tblBody.appendChild(tr);
   }
 }
-function loadEmployeeList() {
-  document.getElementById('loading-employees-msg').textContent = 'Cargando listado...';
-  employeeListBodyEl.innerHTML = '';
-  db.collection("employee_config").get().then(snapshot => {
-    document.getElementById('loading-employees-msg').classList.add('hidden');
-    if (snapshot.empty) {
-      employeeListBodyEl.innerHTML = '<tr><td colspan="4">No hay empleados configurados.</td></tr>';
-      return;
-    }
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const row = employeeListBodyEl.insertRow();
-      row.innerHTML = `
-        <td>${data.nombre}</td>
-        <td>${data.email}</td>
-        <td>${data.horarioHabitual}</td>
-        <td>
-          <button class="action-button btn-plus" onclick="viewEmployeeReport('${data.userId}', '${data.nombre}')" style="background-color:#6f42c1;">🔎</button>
-        </td>
-      `;
-    });
+
+// persistencia de reporte por día
+async function fetchMonthReports(uid){
+  const ym = monthKey();
+  const start = ym+"-01";
+  const end = ym+"-31";
+  const snap = await db.collection("timesheets")
+    .where("userId","==",uid).where("fecha",">=",start).where("fecha","<=",end).get();
+  const map = {};
+  snap.forEach(d=> map[d.data().fecha] = d.data());
+  return map;
+}
+function buttonsForDate(ds, locked){
+  if(locked) return `<span class="chip">Bloqueado</span>`;
+  return `<button class="btn small good" onclick="markHabitual('${ds}')">Habitual</button>
+          <button class="btn small bad" onclick="markAbsence('${ds}')">Falta</button>
+          <button class="btn small" onclick="openDetail('${ds}')">Detalle</button>`;
+}
+async function paintMonth(uid, habitual, locked){
+  const data = await fetchMonthReports(uid);
+  Object.keys(data).forEach(ds=>{
+    const cell = $("cell-"+ds);
+    if(!cell) return;
+    const it = data[ds];
+    const color = it.tipoReporte==="HABITUAL" ? "#86efac" : (it.tipoReporte==="FALTA" ? "#fecaca" : "#bfdbfe");
+    cell.innerHTML = `<span style="color:${color};font-weight:700">${it.tipoReporte}</span> <span class="muted">${it.horarioReportado||it.comentarios||""}</span>`;
   });
-}
-async function adminCreateOrUpdateEmployee() {
-  const email = document.getElementById('admin-employee-email').value;
-  const name = document.getElementById('admin-employee-name').value;
-  const schedule = document.getElementById('admin-employee-schedule').value;
-  if (!email || !schedule) {
-    adminActionMessageEl.style.color = 'red';
-    adminActionMessageEl.textContent = 'El Email y Horario son obligatorios.';
-    return;
-  }
-  try {
-    const snapshot = await db.collection("employee_config").where("email", "==", email).get();
-    if (snapshot.empty) {
-      if (!name) {
-        adminActionMessageEl.style.color = 'red';
-        adminActionMessageEl.textContent = 'Nombre es obligatorio para crear un nuevo registro.';
-        return;
-      }
-      adminActionMessageEl.style.color = 'orange';
-      adminActionMessageEl.textContent = 'AVISO: Primero el empleado debe registrarse. Crea el registro en config manualmente usando su UID.';
-    } else {
-      const docRef = snapshot.docs[0].ref;
-      await docRef.update({
-        nombre: name || snapshot.docs[0].data().nombre,
-        horarioHabitual: schedule
-      });
-      adminActionMessageEl.style.color = 'green';
-      adminActionMessageEl.textContent = `Configuración de ${name || snapshot.docs[0].data().nombre} actualizada.`;
-      loadEmployeeList();
-    }
-  } catch (error) {
-    console.error(error);
-    adminActionMessageEl.style.color = 'red';
-    adminActionMessageEl.textContent = 'Error: No se pudo actualizar. Revisa la consola.';
-  }
-}
-async function adminResetPassword() {
-  const email = document.getElementById('admin-employee-email').value;
-  if (!email) {
-    adminActionMessageEl.style.color = 'red';
-    adminActionMessageEl.textContent = 'Introduce un email para blanquear la contraseña.';
-    return;
-  }
-  try {
-    await auth.sendPasswordResetEmail(email);
-    adminActionMessageEl.style.color = 'green';
-    adminActionMessageEl.textContent = `✅ Email de blanqueo enviado a ${email}.`;
-  } catch (error) {
-    adminActionMessageEl.style.color = 'red';
-    adminActionMessageEl.textContent = `Error al blanquear: ${error.message}. Asegúrate de que el email esté registrado.`;
-  }
-}
-function exportToCsv() {
-  showMessage("Cargando todos los reportes, espera un momento...", false);
-  db.collection("timesheets").get()
-    .then((querySnapshot) => {
-      if (querySnapshot.empty) {
-        showMessage("No hay datos para exportar.", true);
-        return;
-      }
-      let csvContent = "data:text/csv;charset=utf-8,";
-      const headers = ['Nombre', 'Email', 'Fecha', 'Mes_Anio', 'Tipo_Reporte', 'Detalle_Horario', 'Comentarios', 'ID_Empleado'];
-      csvContent += headers.join(";") + "\n";
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        const row = [
-          data.nombre || '',
-          data.email || '',
-          data.fecha || '',
-          data.mesAnio || '',
-          data.tipoReporte || '',
-          (data.horarioReportado || '').replace(/[,;]/g, ' '),
-          (data.comentarios || '').replace(/[,;]/g, ' '),
-          data.userId || ''
-        ];
-        csvContent += row.join(";") + "\n";
-      });
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `Reporte_Horas_Total_${new Date().toISOString().substring(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showMessage("✅ Exportación completa. Revisa tu carpeta de descargas.", false);
-    })
-    .catch(error => {
-      showMessage(`Error al exportar: ${error.message}`, true);
-      console.error("Error al exportar a CSV: ", error);
-    });
-}
-function viewEmployeeReport(userId, employeeName) {
-  if (confirm(`¿Estás seguro que quieres ver los reportes de ${employeeName}? Se listarán en la consola del navegador.`)) {
-    db.collection("timesheets").where("userId", "==", userId).get().then(snapshot => {
-      console.log(`--- REPORTES MENSUALES DE ${employeeName.toUpperCase()} ---`);
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        console.log(`[${data.fecha}] Tipo: ${data.tipoReporte}, Detalle: ${data.horarioReportado}, Comentarios: ${data.comentarios}`);
-      });
-      console.log('--- FIN DEL REPORTE ---');
-      adminActionMessageEl.style.color = 'green';
-      adminActionMessageEl.textContent = `Reportes de ${employeeName} listados en la consola.`;
-    }).catch(e => console.error("Error al ver reportes:", e));
+  // rellenar resto con acciones
+  const y = new Date().getFullYear(), m = new Date().getMonth();
+  const days = new Date(y, m+1, 0).getDate();
+  for(let d=1; d<=days; d++){
+    const ds = fmtDate(new Date(y,m,d));
+    const cell = $("cell-"+ds);
+    if(cell && cell.innerHTML.includes("—")) cell.innerHTML = buttonsForDate(ds, locked);
   }
 }
 
-// =======================================================
-// === EMPLEADO (reporte mensual) ========================
-// =======================================================
-function showExtraDayForm() {
-  extraDayFormEl.classList.toggle('hidden');
-  document.getElementById('extra-report-date').value = '';
-  document.getElementById('extra-horario-reportado').value = '';
-  document.getElementById('extra-comentarios').value = '';
-}
-async function loadMonthlyReport(userId, habitualSchedule) {
-  timesheetBodyEl.innerHTML = '';
-  document.getElementById('loading-report-msg').classList.remove('hidden');
-  const year = new Date().getFullYear();
-  const month = new Date().getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date().toISOString().substring(0, 10);
-  const startOfMonth = new Date(year, month, 1).toISOString().substring(0, 10);
-  const endOfMonth = new Date(year, month + 1, 0).toISOString().substring(0, 10);
-  const reportData = {};
-  const snapshot = await db.collection("timesheets")
-    .where("userId", "==", userId)
-    .where("fecha", ">=", startOfMonth)
-    .where("fecha", "<=", endOfMonth)
-    .get();
-  snapshot.forEach(doc => {
-    const data = doc.data();
-    reportData[data.fecha] = data;
-  });
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    const dateString = date.toISOString().substring(0, 10);
-    const dayOfWeek = date.toLocaleDateString('es-ES', { weekday: 'short' });
-    const isPast = dateString < today;
-    const hasReport = reportData[dateString];
-    const row = timesheetBodyEl.insertRow();
-    row.innerHTML = `
-      <td style="font-weight: bold; background-color: ${isPast ? '#f8f9fa' : 'white'};">${dateString.substring(8)} (${dayOfWeek})</td>
-      <td>${habitualSchedule}</td>
-      <td id="actions-${dateString}" style="text-align: center;">
-        ${generateActionButtons(dateString, isPast, hasReport)}
-      </td>
-    `;
-    if (hasReport) {
-      row.cells[2].innerHTML = `
-        <div style="font-size: 0.8em; font-weight: bold; color: ${hasReport.tipoReporte === 'HABITUAL' ? 'green' : (hasReport.tipoReporte === 'FALTA' ? 'red' : 'blue')};">
-          ${hasReport.tipoReporte}
-        </div>
-        <span style="font-size: 0.7em;">${hasReport.horarioReportado || hasReport.comentarios || ''}</span>
-      `;
-    }
-  }
-  document.getElementById('loading-report-msg').classList.add('hidden');
-}
-function generateActionButtons(dateString, isPast, hasReport) {
-  if (isPast && !hasReport) return '<span style="color:red; font-size:0.8em;">Pendiente</span>';
-  if (hasReport) return '';
-  return `
-    <button class="action-button btn-check" title="Horario Habitual" onclick="saveQuickReport('${dateString}', 'HABITUAL')">✅</button>
-    <button class="action-button btn-cross" title="Ausencia / Falta" onclick="showDetailedInput('${dateString}', 'FALTA')">❌</button>
-    <button class="action-button btn-plus" title="Horas Extra/Diferentes" onclick="showDetailedInput('${dateString}', 'EXTRA')">➕</button>
-  `;
-}
-function showDetailedInput(dateString, type) {
-  const actionsCell = document.getElementById(`actions-${dateString}`);
-  const currentRow = actionsCell.parentNode;
-  const existing = document.getElementById(`extra-row-${dateString}`);
-  if (existing) existing.remove();
-  const newRow = timesheetBodyEl.insertRow(currentRow.rowIndex + 1);
-  newRow.id = `extra-row-${dateString}`;
-  newRow.classList.add('extra-input-row');
-  const cell = newRow.insertCell(0);
-  cell.colSpan = 3;
-  const placeholderText = (type === 'EXTRA')
-    ? "Horario trabajado o cantidad de horas (Ej: 9:00 a 19:00)"
-    : "Motivo de la ausencia (médico, personal, etc.)";
-  cell.innerHTML = `
-    <div style="padding: 5px;">
-      <input type="text" id="horario-reportado-temp-${dateString}" placeholder="${placeholderText}">
-      <textarea id="comentarios-temp-${dateString}" placeholder="Comentarios"></textarea>
-      <button onclick="saveDetailedReport('${dateString}', '${type}')" style="background-color: ${type === 'EXTRA' ? '#007bff' : '#dc3545'}; margin: 5px 0;">Guardar Reporte</button>
-      <button onclick="loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual)" style="background-color: #6c757d; margin: 5px 0;">Cancelar</button>
-    </div>
-  `;
-  actionsCell.innerHTML = '<span style="font-size: 0.8em; color: gray;">Detalle Abierto</span>';
-}
-function createReportObject(date, type, horarioReportado = '', comentarios = '') {
-  const user = auth.currentUser;
-  return {
-    userId: user.uid,
-    email: user.email,
-    nombre: employeeNameEl.textContent,
-    mesAnio: date.substring(0, 7),
-    fecha: date,
-    tipoReporte: type,
-    horarioReportado: horarioReportado,
-    comentarios: comentarios,
+// Acciones rápidas
+window.markHabitual = async (ds)=>{
+  const u = auth.currentUser; if(!u) return;
+  const cfg = await loadEmployeeConfig(u.uid); if(!cfg) return;
+  const ex = await db.collection("timesheets").where("userId","==",u.uid).where("fecha","==",ds).limit(1).get();
+  if(!ex.empty){ setMsg($("emp-msg"), `Ya existe reporte para ${ds}`); return; }
+  await db.collection("timesheets").add({
+    userId:u.uid, email:u.email, nombre: cfg.nombre||"", mesAnio: ds.slice(0,7),
+    fecha: ds, tipoReporte:"HABITUAL", horarioReportado: cfg.horarioHabitual||"", comentarios:"Horario habitual",
     timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  };
+  });
+  await bootEmployeeView(u); setMsg($("emp-msg"), `Guardado ${ds}`, true);
+};
+window.markAbsence = async (ds)=>{
+  const u = auth.currentUser; if(!u) return;
+  const ex = await db.collection("timesheets").where("userId","==",u.uid).where("fecha","==",ds).limit(1).get();
+  if(!ex.empty){ setMsg($("emp-msg"), `Ya existe reporte para ${ds}`); return; }
+  await db.collection("timesheets").add({
+    userId:u.uid, email:u.email, nombre:"", mesAnio: ds.slice(0,7),
+    fecha: ds, tipoReporte:"FALTA", horarioReportado:"", comentarios:"Ausencia",
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  await bootEmployeeView(u); setMsg($("emp-msg"), `Guardado como FALTA ${ds}`, true);
+};
+window.openDetail = (ds)=>{
+  $("extra-form").classList.remove("hidden");
+  $("extra-date").value = ds;
+};
+$("btn-extra-day").onclick = ()=>{ $("extra-form").classList.remove("hidden"); $("extra-date").value=""; };
+$("close-extra").onclick  = ()=>{ $("extra-form").classList.add("hidden"); };
+$("save-extra").onclick   = async ()=>{
+  const u = auth.currentUser; if(!u) return;
+  const date = $("extra-date").value, hours = $("extra-hours").value, notes = $("extra-notes").value;
+  if(!date || !hours){ setMsg($("extra-msg"), "Fecha y horario son obligatorios"); return; }
+  const ex = await db.collection("timesheets").where("userId","==",u.uid).where("fecha","==",date).limit(1).get();
+  if(!ex.empty){ setMsg($("extra-msg"), "Ya existe un reporte ese día"); return; }
+  await db.collection("timesheets").add({
+    userId:u.uid, email:u.email, nombre:"", mesAnio: date.slice(0,7),
+    fecha: date, tipoReporte:"EXTRA", horarioReportado: hours, comentarios: notes,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  setMsg($("extra-msg"), "Guardado", true);
+  await bootEmployeeView(u);
+  $("extra-form").classList.add("hidden");
+  $("extra-hours").value=""; $("extra-notes").value="";
+};
+
+$("btn-submit-month").onclick = async ()=>{
+  const u = auth.currentUser; if(!u) return;
+  const ym = monthKey();
+  await setLock(u.uid, ym, true);
+  await bootEmployeeView(u);
+  setMsg($("emp-msg"), "Planilla enviada y BLOQUEADA", true);
+};
+
+async function bootEmployeeView(user){
+  const ym = monthKey();
+  setChip("month-chip", ym);
+  const cfg = await loadEmployeeConfig(user.uid);
+  if(!cfg){ $("emp-name").textContent="(sin configurar)"; $("emp-sched").textContent="—";
+    setMsg($("emp-msg"), "Tu usuario no está configurado. Pídele al admin que complete employee_config.");
+    renderDays(""); paintMonth(user.uid,"",false); return;
+  }
+  $("emp-name").textContent = cfg.nombre || user.email;
+  $("emp-sched").textContent = cfg.horarioHabitual || "—";
+  renderDays(cfg.horarioHabitual||"");
+
+  const lk = await loadLock(user.uid, ym);
+  setChip("lock-chip", lk.locked ? "Bloqueado" : "Editable");
+  setChip("last-update-chip", lk.lastSubmitted ? new Date(lk.lastSubmitted.toDate()).toLocaleString() : "—");
+  $("btn-submit-month").disabled = lk.locked;
+  $("btn-extra-day").disabled    = lk.locked;
+
+  await paintMonth(user.uid, cfg.horarioHabitual||"", lk.locked);
 }
-function saveQuickReport(dateString, type) {
-  db.collection("timesheets")
-    .where("userId", "==", auth.currentUser.uid)
-    .where("fecha", "==", dateString)
-    .get().then(snapshot => {
-      if (!snapshot.empty) {
-        showMessage(`Ya existe un reporte para el ${dateString}.`, true);
-        return;
-      }
-      const reportData = createReportObject(dateString, type, employeeConfig.horarioHabitual, 'Horario habitual reportado.');
-      db.collection("timesheets").add(reportData)
-        .then(() => {
-          showMessage(`✅ Reporte Rápido guardado para ${dateString}.`, false);
-          loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual);
-        })
-        .catch((error) => showMessage(`Error al guardar: ${error.message}`, true));
-    });
+
+// ============ Admin ============
+$("adm-upsert").onclick = async ()=>{
+  const email = $("adm-email").value.trim();
+  const name  = $("adm-name").value.trim();
+  const sched = $("adm-sched").value.trim();
+  if(!email || !sched){ setMsg($("adm-msg"), "Email y Horario son obligatorios"); return; }
+  // buscar uid por email en config existente
+  const q = await db.collection("employee_config").where("email","==",email).limit(1).get();
+  if(q.empty){
+    setMsg($("adm-msg"), "No existe config para ese email. Crea el usuario primero (registro) y luego completa su UID en employee_config.", false);
+  }else{
+    await q.docs[0].ref.set({ email, nombre: name || q.docs[0].data().nombre || "", horarioHabitual: sched }, { merge:true });
+    setMsg($("adm-msg"), "Actualizado", true);
+    listEmployees();
+  }
+};
+$("adm-reset").onclick = async ()=>{
+  try{ await auth.sendPasswordResetEmail($("adm-email").value.trim()); setMsg($("adm-msg"), "Email de blanqueo enviado", true); }
+  catch(e){ setMsg($("adm-msg"), e.message); }
+};
+$("adm-lock").onclick = async ()=>{
+  if(!$("adm-lock-uid").value || !$("adm-lock-month").value){ setMsg($("lock-msg"), "UID y mes requeridos"); return; }
+  await setLock($("adm-lock-uid").value, $("adm-lock-month").value, true);
+  setMsg($("lock-msg"), "Bloqueado", true);
+};
+$("adm-unlock").onclick = async ()=>{
+  if(!$("adm-lock-uid").value || !$("adm-lock-month").value){ setMsg($("lock-msg"), "UID y mes requeridos"); return; }
+  await setLock($("adm-lock-uid").value, $("adm-lock-month").value, false);
+  setMsg($("lock-msg"), "Desbloqueado", true);
+};
+
+async function listEmployees(){
+  $("adm-list").innerHTML = ""; $("adm-list-msg").textContent="Cargando...";
+  const snap = await db.collection("employee_config").get();
+  $("adm-list-msg").textContent="";
+  if(snap.empty){ $("adm-list").innerHTML = `<tr><td colspan="5">Sin empleados</td></tr>`; return; }
+  snap.forEach(d=>{
+    const v = d.data();
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${v.nombre||"—"}</td><td>${v.email||"—"}</td><td>${v.horarioHabitual||"—"}</td><td>${v.userId||d.id}</td>
+                    <td><button class="btn small" onclick="inspectReports('${v.userId||d.id}','${v.nombre||""}')">Ver reportes</button></td>`;
+    $("adm-list").appendChild(tr);
+  });
 }
-function saveDetailedReport(dateString, type) {
-  const horarioReportado = document.getElementById(`horario-reportado-temp-${dateString}`).value;
-  const comentarios = document.getElementById(`comentarios-temp-${dateString}`).value;
-  if (!horarioReportado && type !== 'FALTA') {
-    showMessage('Debes especificar el horario trabajado o las horas extra.', true);
+window.inspectReports = async (uid, name)=>{
+  const ym = monthKey();
+  const start = ym+"-01", end = ym+"-31";
+  const snap = await db.collection("timesheets").where("userId","==",uid).where("fecha",">=",start).where("fecha","<=",end).get();
+  console.group(`Reportes de ${name||uid} (${ym})`);
+  snap.forEach(d=>{
+    const v = d.data(); console.log(`[${v.fecha}] ${v.tipoReporte} | ${v.horarioReportado||""} | ${v.comentarios||""}`);
+  });
+  console.groupEnd();
+  setMsg($("adm-list-msg"), `Listados en consola ${name||uid}`, true);
+};
+
+$("export-csv").onclick = async ()=>{
+  const snap = await db.collection("timesheets").get();
+  if(snap.empty){ setMsg($("adm-list-msg"), "Sin datos"); return; }
+  let csv = "Nombre;Email;Fecha;Mes_Anio;Tipo;Detalle;Comentarios;UID\n";
+  snap.forEach(d=>{
+    const v = d.data();
+    const row = [v.nombre||"",v.email||"",v.fecha||"",v.mesAnio||"",v.tipoReporte||"", (v.horarioReportado||"").replace(/[;,\n]/g," "), (v.comentarios||"").replace(/[;,\n]/g," "), v.userId||""].join(";");
+    csv += row+"\n";
+  });
+  const a = document.createElement("a");
+  a.href = "data:text/csv;charset=utf-8," + encodeURI(csv);
+  a.download = `reportes_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+};
+
+// ============ Auth State ============
+auth.onAuthStateChanged(async (user)=>{
+  $("env-chip").textContent = "Conectado";
+  if(!user){
+    authCard.classList.remove("hidden");
+    appCard.classList.add("hidden");
+    $("user-email").textContent="—";
+    $("role-chip").textContent="—";
     return;
   }
-  db.collection("timesheets")
-    .where("userId", "==", auth.currentUser.uid)
-    .where("fecha", "==", dateString)
-    .get().then(snapshot => {
-      if (!snapshot.empty) {
-        showMessage(`Ya existe un reporte para el ${dateString}.`, true);
-        return;
-      }
-      const reportData = createReportObject(dateString, type, horarioReportado, comentarios);
-      db.collection("timesheets").add(reportData)
-        .then(() => {
-          showMessage(`✅ Reporte Detallado guardado para ${dateString}.`, false);
-          loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual);
-        })
-        .catch((error) => showMessage(`Error al guardar: ${error.message}`, true));
-    });
-}
-function saveExtraDayTimeSheet() {
-  const date = document.getElementById('extra-report-date').value;
-  const horarioReportado = document.getElementById('extra-horario-reportado').value;
-  const comentarios = document.getElementById('extra-comentarios').value;
-  if (!date || !horarioReportado) {
-    showMessage("Debes especificar la fecha y el horario trabajado para el día extra.", true);
-    return;
-  }
-  db.collection("timesheets")
-    .where("userId", "==", auth.currentUser.uid)
-    .where("fecha", "==", date)
-    .get().then(snapshot => {
-      if (!snapshot.empty) {
-        showMessage(`Ya existe un reporte para el ${date}. Si quieres editarlo, usa la tabla.`, true);
-        return;
-      }
-      const reportData = createReportObject(date, 'DIA_EXTRA', horarioReportado, comentarios);
-      db.collection("timesheets").add(reportData)
-        .then(() => {
-          showMessage(`✅ Día Extra reportado para ${date}.`, false);
-          showExtraDayForm();
-          loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual);
-        })
-        .catch((error) => showMessage(`Error al guardar día extra: ${error.message}`, true));
-    });
-}
+  $("user-email").textContent = user.email;
+  authCard.classList.add("hidden");
+  appCard.classList.remove("hidden");
 
-// =======================================================
-// === OBSERVADOR DE ESTADO (maneja vistas) ==============
-// =======================================================
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    // Ayuda para obtener tu UID de admin
-    console.log("--- CONFIGURACIÓN DE USUARIO ---");
-    console.log("Tu UID actual (user.uid) es:", user.uid);
-    console.log("El ADMIN_UID configurado es:", ADMIN_UID);
-    console.log("--------------------------------");
+  const role = await resolveRole(user);
+  $("role-chip").textContent = role.toUpperCase();
 
-    // Mostrar vista privada por defecto y el mail
-    document.getElementById('user-email-display').textContent = user.email;
-    authView.classList.add('hidden');
-    privateView.classList.remove('hidden');
-
-    // Si es admin: mostrar panel admin y salir
-    if (user.uid === ADMIN_UID) {
-      employeeNameEl.textContent = 'ADMINISTRADOR';
-      horarioHabitualDisplayEl.textContent = 'Gestión de Empleados';
-      adminViewEl.classList.remove('hidden');
-      document.getElementById('employee-dashboard').classList.add('hidden');
-      loadEmployeeList();
-      showMessage('');
-      return;
-    }
-
-    // Si es empleado: ocultar admin y cargar su config + calendario
-    adminViewEl.classList.add('hidden');
-    document.getElementById('employee-dashboard').classList.remove('hidden');
-
-    db.collection("employee_config").where("userId", "==", user.uid).get()
-      .then(snapshot => {
-        if (snapshot.empty) {
-          employeeNameEl.textContent = 'Usuario sin configurar';
-          horarioHabitualDisplayEl.textContent = 'Horario no asignado. Contacte a RRHH.';
-          showMessage('⚠️ Tu usuario aún no está configurado por el administrador.', true);
-          return;
-        }
-        employeeConfig = snapshot.docs[0].data();
-        employeeNameEl.textContent = employeeConfig.nombre;
-        horarioHabitualDisplayEl.textContent = employeeConfig.horarioHabitual;
-        loadMonthlyReport(user.uid, employeeConfig.horarioHabitual);
-        showMessage('');
-      })
-      .catch(error => {
-        console.error("Error al cargar config: ", error);
-        showMessage('Error al cargar la configuración del empleado.', true);
-      });
-  } else {
-    authView.classList.remove('hidden');
-    privateView.classList.add('hidden');
-    document.getElementById('login-form').classList.remove('hidden');
-    document.getElementById('register-form').classList.add('hidden');
+  if(role === "admin"){
+    segAdm.classList.add("active"); segEmp.classList.remove("active");
+    empView.classList.add("hidden"); admView.classList.remove("hidden");
+    await listEmployees();
+  }else{
+    segEmp.classList.add("active"); segAdm.classList.remove("active");
+    empView.classList.remove("hidden"); admView.classList.add("hidden");
+    await bootEmployeeView(user);
   }
 });
