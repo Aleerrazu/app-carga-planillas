@@ -306,7 +306,25 @@
   });
 
   // ===== Enviar planilla (lock) =====
-  $('submit-month').addEventListener('click', function(){
+  
+  // Reset mes
+  function resetMonth(user){
+    var key=currentYM(); var db=firebase.firestore();
+    return db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
+      .then(function(snap){
+        var batch=db.batch(); snap.forEach(function(d){ batch.delete(d.ref); });
+        return batch.commit();
+      })
+      .then(function(){ return db.collection('locks').doc(user.uid+'_'+key).delete().catch(function(){}); })
+      .then(function(){ document.getElementById('last-update').textContent=new Date().toLocaleString(); paintTable(user); });
+  }
+
+  document.getElementById('reset-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    if(!confirm('¿Resetear la planilla del mes actual? Esto borra los registros del mes.')) return;
+    resetMonth(u);
+  });
+$('submit-month').addEventListener('click', function(){
     var u=firebase.auth().currentUser; if(!u) return;
     var key=currentYM();
     setLock(u.uid,key,true).then(function(){ return getLock(u.uid,key); }).then(function(lk){

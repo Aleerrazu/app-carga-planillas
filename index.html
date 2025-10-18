@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Control Horario – Panel</title>
-  <!-- Cache busting duro -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
@@ -24,6 +23,7 @@
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .sp{justify-content:space-between}
     .btn{background:var(--accent);color:white;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
     .btn.small{padding:6px 10px;border-radius:999px} .btn.ghost{background:transparent;border:1px solid #334155}
+    .btn.danger{background:#ef4444}
     .chip{background:#334155;color:#e5e7eb;padding:4px 8px;border-radius:999px;font-size:12px}
     .hidden{display:none !important} .msg{margin:10px 0;font-size:14px}
     input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
@@ -39,22 +39,19 @@
     .trash{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;cursor:pointer}
     .stack{display:flex;flex-direction:column;gap:4px} .tag{display:inline-block;background:#0b1223;border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:12px}
   </style>
-  <script>
-    window.__APP_VERSION = "v2025.10.18-1715-53 UTC";
-  </script>
+  <script>window.__APP_VERSION="v2025.10.18-1746-43 UTC";</script>
 </head>
 <body>
   <div class="wrap">
     <div class="brand">
       <div class="dot"></div>
       <div class="title">Control Horario · Panel</div>
-      <div class="chip" id="version-chip">v2025.10.18-1715-53 UTC</div>
+      <div class="chip" id="version-chip">v2025.10.18-1746-43 UTC</div>
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
       <button class="btn small" id="logout-btn" type="button">Salir</button>
     </div>
 
-    <!-- Switch solo visible para admins -->
     <div id="view-switch" class="row hidden" style="margin-bottom:8px;justify-content:flex-end">
       <div class="chip" id="role-chip">—</div>
       <div style="width:8px"></div>
@@ -64,7 +61,6 @@
       </div>
     </div>
 
-    <!-- LOGIN -->
     <div id="auth-card" class="card pad">
       <div class="row sp"><b>Ingresar</b></div>
       <div class="grid grid-3" style="grid-template-columns:1fr 1fr auto">
@@ -79,9 +75,7 @@
       <div class="msg" id="auth-msg"></div>
     </div>
 
-    <!-- APP -->
     <div id="app-card" class="card pad hidden">
-      <!-- EMPLEADO -->
       <div id="employee-view">
         <div class="row sp">
           <div class="row">
@@ -95,7 +89,8 @@
             <div class="chip">Última actualización: <span id="last-update">—</span></div>
             <div class="chip">Estado: <span id="lock-state">—</span></div>
           </div>
-          <div class="row">
+          <div class="row" style="gap:8px">
+            <button class="btn ghost" id="reset-month" type="button">Resetear planilla</button>
             <button class="btn" id="submit-month" type="button">Enviar planilla</button>
           </div>
         </div>
@@ -112,7 +107,7 @@
                 <col style="width:18%">
               </colgroup>
               <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
-            <tbody id="rows"></tbody>
+              <tbody id="rows"></tbody>
             </table>
           </div>
         </div>
@@ -129,44 +124,32 @@
         <div class="msg" id="emp-msg"></div>
       </div>
 
-      <!-- ADMIN -->
       <div id="admin-view" class="hidden">
         <div class="pad"><b>Panel de Administración</b><div class="muted">(Oculto para empleados. Para admins queda el switch arriba.)</div></div>
       </div>
     </div>
   </div>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- App con cache-buster Fuerte -->
-  <script>var __BUST="20251018171553-"+Math.random().toString(36).slice(2);</script>
-  <script src="app.js?v=20251018172459"></script>
+  <script src="app.js?v=20251018174643"></script>
 
-  <!-- Fallback doLogin si app.js no lo definió -->
   <script>
-    if (typeof window.doLogin !== 'function') {
-      console.warn('Fallback doLogin activo');
-      window.doLogin = function() {
+    if (typeof window.doLogin !== 'function') {{
+      window.doLogin = function() {{
         const btn = document.getElementById('login-btn');
         const msg = document.getElementById('auth-msg');
         const email = (document.getElementById('email')?.value || '').trim();
         const pass  = (document.getElementById('password')?.value || '');
-        if (!window.firebase || !firebase.auth) {
-          msg.textContent = 'Firebase no está listo (revisá los <script> de Firebase).';
-          msg.style.color = '#fecaca';
-          return;
-        }
-        btn.disabled = true;
-        btn.textContent = 'Ingresando...';
+        btn.disabled = true; btn.textContent = 'Ingresando...';
         firebase.auth().signInWithEmailAndPassword(email, pass)
-          .then(() => { msg.textContent = 'Ingreso correcto'; msg.style.color = '#86efac'; })
-          .catch(e => { console.error(e); msg.textContent = e?.message || 'No se pudo ingresar'; msg.style.color = '#fecaca'; })
-          .finally(() => { btn.disabled = false; btn.textContent = 'Entrar'; });
-      };
-    }
+          .then(() => {{ msg.textContent = 'Ingreso correcto'; msg.style.color = '#86efac'; }})
+          .catch(e => {{ msg.textContent = e?.message || 'No se pudo ingresar'; msg.style.color = '#fecaca'; }})
+          .finally(() => {{ btn.disabled = false; btn.textContent = 'Entrar'; }});
+      }}
+    }}
   </script>
 </body>
 </html>
