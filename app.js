@@ -1,590 +1,452 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
-  authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
-  projectId: "controlhorarioapp-6a9c7",
-  storageBucket: "controlhorarioapp-6a9c7.firebasestorage.app",
-  messagingSenderId: "447263250565",
-  appId: "1:447263250565:web:6704994cbfbfe7c98b31ec"
-};
+(function(){
+  try { document.getElementById('version-chip').textContent = window.__APP_VERSION || document.getElementById('version-chip').textContent; } catch(e){}
 
-// =======================================================
-// === INICIALIZACIÓN Y REFERENCIAS ======================
-// =======================================================
+  var firebaseConfig = {
+    apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
+    authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
+    projectId: "controlhorarioapp-6a9c7",
+    storageBucket: "controlhorarioapp-6a9c7.firebasestorage.app",
+    messagingSenderId: "447263250565",
+    appId: "1:447263250565:web:6704994cbfbfe7c98b31ec"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+  function $(id){ return document.getElementById(id); }
+  function fmt(d){ return d.toISOString().split('T')[0]; }
+  function ym(d){ return d.toISOString().slice(0,7); }
+  function ymFromParts(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+  function wkey(d){ return ['sun','mon','tue','wed','thu','fri','sat'][d.getDay()]; }
+  function wname(d){ return d.toLocaleDateString('es-AR',{weekday:'long'}); }
+  function parseHM(s){
+    if(!s) return null;
+    var m = s.match(/^\s*(\d{1,2})\s*:?(\d{2})?\s*-\s*(\d{1,2})\s*:?(\d{2})?\s*$/);
+    if(!m) return null;
+    var h1=+m[1], m1=+(m[2]||0), h2=+m[3], m2=+(m[4]||0);
+    var start=h1*60+m1, end=h2*60+m2;
+    var diff = end>=start? end-start : (24*60-start+end);
+    return {hours:(diff/60).toFixed(2), start:String(h1).padStart(2,'0')+':'+String(m1).padStart(2,'0'), end:String(h2).padStart(2,'0')+':'+String(m2).padStart(2,'0')};
+  }
+  function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
-// Referencias del DOM
-const messageEl = document.getElementById('message');
-const authView = document.getElementById('auth-view');
-const privateView = document.getElementById('private-view');
-const employeeNameEl = document.getElementById('employee-name');
-const horarioHabitualDisplayEl = document.getElementById('horario-habitual-display');
-const adminViewEl = document.getElementById('admin-view');
-const timesheetBodyEl = document.getElementById('timesheet-body');
-const extraDayFormEl = document.getElementById('extra-day-form');
-const employeeListBodyEl = document.getElementById('employee-list-body');
-const employeeManagementViewEl = document.getElementById('employee-management-view');
-const adminActionMessageEl = document.getElementById('admin-action-message');
+  function getRole(uid){
+    return firebase.firestore().collection('roles').doc(uid).get().then(function(r){
+      return (r.exists && r.data() && r.data().role==='admin') ? 'admin' : 'employee';
+    }).catch(function(){ return 'employee'; });
+  }
+  function getConfig(uid){
+    return firebase.firestore().collection('employee_config').where('userId','==',uid).limit(1).get()
+      .then(function(q){ if(q.empty) return null; var d=q.docs[0]; var o=d.data(); o.id=d.id; return o; });
+  }
+  function getLock(uid, key){
+    return firebase.firestore().collection('locks').doc(uid+'_'+key).get()
+      .then(function(d){ return d.exists ? d.data() : {locked:false,lastSubmitted:null}; });
+  }
+  function setLock(uid, key, locked){
+    return firebase.firestore().collection('locks').doc(uid+'_'+key).set(
+      {locked:locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null},
+      {merge:true}
+    );
+  }
+  function monthReports(uid, key){
+    return firebase.firestore().collection('timesheets')
+      .where('userId','==',uid).where('mesAnio','==',key).get()
+      .then(function(s){ var map={}; s.forEach(function(x){ map[x.data().fecha]=x.data(); }); return map; });
+  }
+  function getOneReport(uid, dateStr){
+    return firebase.firestore().collection('timesheets').doc(uid+'_'+dateStr).get()
+      .then(function(d){ return d.exists ? d.data() : null; });
+  }
 
-// Global state
-let employeeConfig = null;
-const currentMonth = new Date().toISOString().substring(0, 7); // Ej: 2025-10
-document.getElementById('current-month-display').textContent = currentMonth;
+  function buildMonthSelectors(){
+    var now=new Date(), y=now.getFullYear();
+    var selM=$('sel-month'), selY=$('sel-year');
+    var months=['01','02','03','04','05','06','07','08','09','10','11','12'];
+    var names=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    selM.innerHTML=''; selY.innerHTML='';
+    for(var i=0;i<12;i++){ var opt=document.createElement('option'); opt.value=months[i]; opt.textContent=names[i].charAt(0).toUpperCase()+names[i].slice(1); selM.appendChild(opt); }
+    for(var k=y-2;k<=y+2;k++){ var oy=document.createElement('option'); oy.value=String(k); oy.textContent=String(k); selY.appendChild(oy); }
+    var ymNow = ym(now).split('-'); selM.value=ymNow[1]; selY.value=ymNow[0];
+  }
+  function currentYM(){ return ymFromParts($('sel-year').value, $('sel-month').value); }
 
+  function habitualForDay(sbd, d){
+    var o = (sbd && sbd[wkey(d)]) || {};
+    if(o.off) return {text:null, variable:false, skip:true};
+    if(o.variable) return {text:"", variable:true, skip:false};
+    if(!o.start || !o.end) return {text:"", variable:false, skip:false};
+    return {text:o.start+"-"+o.end, variable:false, skip:false};
+  }
+  function rowState(ds){ var r=$('row-'+ds); return r? JSON.parse(r.getAttribute('data-state')||'{}') : {}; }
+  function setRowState(ds, st){ var r=$('row-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
 
-// ID de usuario Administrador (DEBES REEMPLAZAR ESTO CON TU PROPIO UID REAL)
-const ADMIN_UID = "REEMPLAZA_ESTO_CON_TU_UID_DE_ADMIN"; 
+  function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
+    var tr=document.createElement('tr'); tr.id='row-'+ds;
 
+    var td1=document.createElement('td'); 
+    var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
+    td1.appendChild(b);
 
-// =======================================================
-// === FUNCIONES DE INTERFAZ Y AUTENTICACIÓN (Inicio/Registro) ===
-// =======================================================
-
-function showMessage(msg, isError = true) {
-    messageEl.textContent = msg;
-    messageEl.style.color = isError ? 'red' : 'green';
-}
-
-function showLogin() {
-    document.getElementById('login-form').classList.remove('hidden');
-    document.getElementById('register-form').classList.add('hidden');
-    messageEl.textContent = '';
-}
-
-function showRegister() {
-    document.getElementById('register-form').classList.remove('hidden');
-    document.getElementById('login-form').classList.add('hidden');
-    messageEl.textContent = '';
-}
-
-function registerUser() {
-    const email = document.getElementById('reg-email').value;
-    const password = document.getElementById('reg-password').value;
-    
-    auth.createUserWithEmailAndPassword(email, password)
-        .then(() => {
-            showMessage("✅ Registro exitoso.", false);
-        })
-        .catch((error) => {
-            showMessage(`Error de Registro: ${error.message}`);
-        });
-}
-
-function loginUser() {
-    const email = document.getElementById('log-email').value;
-    const password = document.getElementById('log-password').value;
-    
-    auth.signInWithEmailAndPassword(email, password)
-        .then(() => {
-            showMessage("✅ Inicio de sesión exitoso.", false);
-        })
-        .catch((error) => {
-            showMessage(`Error de Login: ${error.message}`);
-        });
-}
-
-function logoutUser() {
-    auth.signOut()
-        .then(() => {
-            showMessage("Sesión cerrada. Vuelve pronto.", false);
-        })
-        .catch((error) => {
-            showMessage(`Error al cerrar sesión: ${error.message}`);
-        });
-}
-
-
-// =======================================================
-// === FUNCIONES ADMINISTRACIÓN (TÚ) =====================
-// =======================================================
-
-function showEmployeeManagement() {
-    employeeManagementViewEl.classList.toggle('hidden');
-    if (!employeeManagementViewEl.classList.contains('hidden')) {
-        loadEmployeeList();
+    var td2=document.createElement('td');
+    if(variable){ 
+      var inp=document.createElement('input'); 
+      inp.id='var-'+ds; 
+      inp.placeholder='HH:MM-HH:MM'; 
+      if(locked) inp.disabled=true; 
+      td2.appendChild(inp); 
+    } else { 
+      td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); 
     }
-}
 
-// 1. Cargar la lista de empleados para la tabla de gestión
-function loadEmployeeList() {
-    document.getElementById('loading-employees-msg').textContent = 'Cargando listado...';
-    employeeListBodyEl.innerHTML = '';
-    
-    db.collection("employee_config").get().then(snapshot => {
-        document.getElementById('loading-employees-msg').classList.add('hidden');
-        if (snapshot.empty) {
-            employeeListBodyEl.innerHTML = '<tr><td colspan="4">No hay empleados configurados.</td></tr>';
-            return;
-        }
+    var td3=document.createElement('td'); 
+    td3.id='hrs-'+ds; 
+    td3.className='stack muted'; 
+    td3.innerHTML='<span class="tag">—</span>';
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const row = employeeListBodyEl.insertRow();
-            row.innerHTML = `
-                <td>${data.nombre}</td>
-                <td>${data.email}</td>
-                <td>${data.horarioHabitual}</td>
-                <td>
-                    <button class="action-button btn-plus" onclick="viewEmployeeReport('${data.userId}', '${data.nombre}')" style="background-color:#6f42c1;">🔎</button>
-                </td>
-            `;
-        });
+    var td4=document.createElement('td'); 
+    td4.className='icon-row';
+    var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
+    var ab=document.createElement('button'); ab.id='ab-'+ds; ab.className='icon bad'; ab.textContent='✕'; if(locked||isOffExtraOnly) ab.disabled=true;
+    var ex=document.createElement('button'); ex.id='exbtn-'+ds; ex.className='icon blue'; ex.textContent='＋'; if(locked) ex.disabled=true;
+    td4.appendChild(ok); td4.appendChild(ab); td4.appendChild(ex);
+
+    if(isOffExtraOnly){
+      var del=document.createElement('button'); del.className='trash'; del.title='Borrar este extra'; del.textContent='🗑';
+      td4.appendChild(del);
+      del.addEventListener('click', function(){
+        var u=firebase.auth().currentUser; if(!u) return;
+        firebase.firestore().collection('timesheets').doc(u.uid+'_'+ds).delete().then(function(){ paintCurrentUser(); });
+      });
+    }
+
+    var td5=document.createElement('td'); 
+    var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
+    td5.appendChild(cm);
+
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
+
+    var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
+    sub.innerHTML= ''
+      + '<td>Extra</td>'
+      + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'
+      + '<td id="hrsEx-'+ds+'" class="muted">—</td>'
+      + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'
+      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
+
+    if(locked){ 
+      var rm = sub.querySelector('#rmEx-'+ds); if(rm) rm.disabled=true; 
+      var exInp = sub.querySelector('#ex-'+ds); if(exInp) exInp.disabled=true;
+      var cmEx = sub.querySelector('#cmEx-'+ds); if(cmEx) cmEx.disabled=true;
+    }
+
+    var st={ok:false,ab:false,ex:false,extraHours:"",comment:(existing&&existing.comentarios)||"",cmExtra:""};
+    if(existing){
+      if(existing.tipoReporte==='HABITUAL') st.ok=true;
+      if(existing.tipoReporte==='FALTA') st.ab=true;
+      if(existing.tipoReporte==='EXTRA'){ st.ex=true; st.extraHours=existing.horarioReportado||""; st.cmExtra=existing.comentarios||""; }
+      if(existing.tipoReporte==='MIXTO'){ st.ok=true; st.ex=true; var parts=(existing.horarioReportado||"").split('+'); st.extraHours=(parts[1]||"").trim(); }
+    }
+    setRowState(ds, st);
+    return [tr, sub];
+  }
+
+  function applyStateToUI(ds, habitual, variable){
+    var st=rowState(ds);
+    var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds);
+    var hrsEx = document.getElementById('hrsEx-'+ds) || null;
+
+    if(ok) ok.classList.toggle('active', !!st.ok);
+    if(ab) ab.classList.toggle('active', !!st.ab);
+    if(exb) exb.classList.toggle('active', !!st.ex);
+    if(exInput && st.extraHours) exInput.value = st.extraHours;
+    if($('cmEx-'+ds) && st.cmExtra) $('cmEx-'+ds).value = st.cmExtra;
+
+    var hrsMain=$('hrs-'+ds); if(!hrsMain) return;
+    hrsMain.innerHTML='';
+    if(st.ab){
+      var chip0=document.createElement('span'); chip0.className='tag'; chip0.textContent='0 h'; hrsMain.appendChild(chip0);
+      if(hrsEx) hrsEx.textContent='—';
+      return;
+    }
+    var pusoAlgo=false;
+    if(st.ok){
+      var h=habitual;
+      if(variable){ var v=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v) h=v; }
+      var p=parseHM(h);
+      var chip=document.createElement('span'); chip.className='tag'; chip.textContent = p? (p.hours+' h'):'—';
+      hrsMain.appendChild(chip);
+      pusoAlgo=true;
+    }
+    if(st.ex){
+      var t=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||'').trim();
+      var p2=parseHM(t);
+      var chip2=document.createElement('span'); chip2.className='tag'; chip2.textContent = p2? (p2.hours+' h'):'—';
+      hrsMain.appendChild(chip2);
+      if(hrsEx) hrsEx.textContent = p2? (p2.hours+' h') : '—';
+      pusoAlgo=true;
+    }else{
+      if(hrsEx) hrsEx.textContent='—';
+    }
+    if(!pusoAlgo){
+      var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
+    }
+  }
+
+  function persistState(user, ds, key, habitual, variable){
+    var st=rowState(ds);
+    var tipo=null, hr="", com=(($('cm-'+ds)&&$('cm-'+ds).value)||"").trim();
+    var cmEx=(($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"").trim();
+    if(st.ok && st.ex){ var h=habitual; if(variable){ var v=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v) h=v; } hr=h+" + "+(st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim()); tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
+    else if(st.ok){ var h2=habitual; if(variable){ var v2=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v2) h2=v2; } hr=h2; tipo='HABITUAL'; }
+    else if(st.ab){ tipo='FALTA'; hr=""; }
+    else if(st.ex){ hr=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim(); tipo='EXTRA'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
+    var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
+    if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
+    return getConfig(user.uid).then(function(cfg){
+      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
+        .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
     });
-}
+  }
 
-// 2. Función para crear o actualizar configuración de empleado
-async function adminCreateOrUpdateEmployee() {
-    const email = document.getElementById('admin-employee-email').value;
-    const name = document.getElementById('admin-employee-name').value;
-    const schedule = document.getElementById('admin-employee-schedule').value;
-    
-    if (!email || !schedule) {
-        adminActionMessageEl.style.color = 'red';
-        adminActionMessageEl.textContent = 'El Email y Horario son obligatorios.';
-        return;
-    }
+  function paintTable(user){
+    var key=currentYM();
+    return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
+      var cfg=arr[0], lock=arr[1], existing=arr[2];
+      $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
+      $('last-update').textContent = '—';
+      $('user-email').textContent = user.email;
 
-    try {
-        // Buscar si el usuario ya existe en employee_config
-        const snapshot = await db.collection("employee_config").where("email", "==", email).get();
-
-        if (snapshot.empty) {
-            // Si no existe en config, forzamos la creación (asume que ya se registró en Auth)
-            if (!name) {
-                adminActionMessageEl.style.color = 'red';
-                adminActionMessageEl.textContent = 'Nombre es obligatorio para crear un nuevo registro.';
-                return;
-            }
-            
-            // Buscar el UID por email (Firestore no lo hace directamente, requiere un paso extra)
-            // Ya que no podemos obtener el UID directamente por email del Auth en el cliente, 
-            // asumiremos que el admin debe copiar el UID manualmente si es un usuario existente.
-            adminActionMessageEl.style.color = 'orange';
-            adminActionMessageEl.textContent = 'AVISO: Primero el empleado debe registrarse. Crea el registro en config manualmente usando su UID.';
-            
-        } else {
-            // Usuario encontrado, actualizar configuración
-            const docRef = snapshot.docs[0].ref;
-            await docRef.update({
-                nombre: name || snapshot.docs[0].data().nombre,
-                horarioHabitual: schedule
-            });
-            adminActionMessageEl.style.color = 'green';
-            adminActionMessageEl.textContent = `Configuración de ${name} actualizada.`;
-            loadEmployeeList();
-        }
-
-    } catch (error) {
-        console.error(error);
-        adminActionMessageEl.style.color = 'red';
-        adminActionMessageEl.textContent = 'Error: No se pudo actualizar. Revisa la consola.';
-    }
-}
-
-// 3. Función para blanquear contraseña
-async function adminResetPassword() {
-    const email = document.getElementById('admin-employee-email').value;
-    if (!email) {
-        adminActionMessageEl.style.color = 'red';
-        adminActionMessageEl.textContent = 'Introduce un email para blanquear la contraseña.';
-        return;
-    }
-
-    try {
-        await auth.sendPasswordResetEmail(email);
-        adminActionMessageEl.style.color = 'green';
-        adminActionMessageEl.textContent = `✅ Email de blanqueo enviado a ${email}.`;
-    } catch (error) {
-        adminActionMessageEl.style.color = 'red';
-        adminActionMessageEl.textContent = `Error al blanquear: ${error.message}. Asegúrate de que el email esté registrado.`;
-    }
-}
-
-// 4. Función para exportar todos los datos (CSV/Excel)
-function exportToCsv() {
-    showMessage("Cargando todos los reportes, espera un momento...", false);
-    
-    db.collection("timesheets").get()
-        .then((querySnapshot) => {
-            if (querySnapshot.empty) {
-                showMessage("No hay datos para exportar.", true);
-                return;
-            }
-            
-            let csvContent = "data:text/csv;charset=utf-8,";
-            
-            // 1. Encabezados (Headers)
-            const headers = ['Nombre', 'Email', 'Fecha', 'Mes_Anio', 'Tipo_Reporte', 'Detalle_Horario', 'Comentarios', 'ID_Empleado'];
-            csvContent += headers.join(";") + "\n"; // Usamos ; como separador para Excel
-            
-            // 2. Datos
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                
-                // Extraer los campos en el orden de los headers, manejando valores nulos
-                const row = [
-                    data.nombre || '',
-                    data.email || '',
-                    data.fecha || '',
-                    data.mesAnio || '',
-                    data.tipoReporte || '',
-                    (data.horarioReportado || '').replace(/[,;]/g, ' '), // Limpiar comas/puntos y comas
-                    (data.comentarios || '').replace(/[,;]/g, ' '),
-                    data.userId || ''
-                ];
-                
-                csvContent += row.join(";") + "\n";
-            });
-
-            // 3. Crear y descargar el archivo CSV
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `Reporte_Horas_Total_${new Date().toISOString().substring(0, 10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            showMessage("✅ Exportación completa. Revisa tu carpeta de descargas.", false);
-        })
-        .catch(error => {
-            showMessage(`Error al exportar: ${error.message}`, true);
-            console.error("Error al exportar a CSV: ", error);
-        });
-}
-
-
-// 5. Función de Administración: Ver Reporte de un Empleado (Muestra datos en la consola para simplificar)
-function viewEmployeeReport(userId, employeeName) {
-    // Usamos el alert() para informar que la acción se ve en la consola (ya que no tenemos una subvista de reportes)
-    // NOTA: En un entorno de producción real, esto debería ser una vista dentro de la app.
-    if (confirm(`¿Estás seguro que quieres ver los reportes de ${employeeName}? Se listarán en la consola del navegador.`)) {
-        db.collection("timesheets").where("userId", "==", userId).get().then(snapshot => {
-            console.log(`--- REPORTES MENSUALES DE ${employeeName.toUpperCase()} ---`);
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                console.log(`[${data.fecha}] Tipo: ${data.tipoReporte}, Detalle: ${data.horarioReportado}, Comentarios: ${data.comentarios}`);
-            });
-            console.log('--- FIN DEL REPORTE ---');
-            adminActionMessageEl.style.color = 'green';
-            adminActionMessageEl.textContent = `Reportes de ${employeeName} listados en la consola.`;
-        }).catch(e => console.error("Error al ver reportes:", e));
-    }
-}
-
-
-// =======================================================
-// === FUNCIONES EMPLEADO (REPORTE MENSUAL) ==============
-// =======================================================
-
-// Muestra/oculta el formulario de día extra
-function showExtraDayForm() {
-    extraDayFormEl.classList.toggle('hidden');
-    // Limpiar campos al mostrar
-    document.getElementById('extra-report-date').value = '';
-    document.getElementById('extra-horario-reportado').value = '';
-    document.getElementById('extra-comentarios').value = '';
-}
-
-
-// Lógica de reportes del mes
-async function loadMonthlyReport(userId, habitualSchedule) {
-    timesheetBodyEl.innerHTML = '';
-    document.getElementById('loading-report-msg').classList.remove('hidden');
-
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth(); // 0-11
-    
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date().toISOString().substring(0, 10);
-    
-    // 1. Obtener todos los reportes ya cargados para este mes
-    const startOfMonth = new Date(year, month, 1).toISOString().substring(0, 10);
-    const endOfMonth = new Date(year, month + 1, 0).toISOString().substring(0, 10);
-
-    const reportData = {}; // Mapa para rápido acceso {fecha: reporte}
-    const snapshot = await db.collection("timesheets")
-        .where("userId", "==", userId)
-        .where("fecha", ">=", startOfMonth)
-        .where("fecha", "<=", endOfMonth)
-        .get();
-
-    snapshot.forEach(doc => {
-        const data = doc.data();
-        reportData[data.fecha] = data;
+      var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
+      var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
+      for(var d=1; d<=count; d++){
+        var date=new Date(y,m-1,d); var ds=fmt(date);
+        var info=habitualForDay(sbd,date); var hasExisting=!!existing[ds];
+        var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
+        if(info.skip && !hasExisting) continue;
+        var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
+        var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
+        (function(ds,info){
+          var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
+          if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          if(exb) exb.addEventListener('click', function(){ var row=$('sub-'+ds); if(row) row.classList.toggle('hidden'); var st=rowState(ds); st.ex=!row.classList.contains('hidden'); setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
+          applyStateToUI(ds,info.text,info.variable);
+          if(existing[ds]){
+            var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
+            if(existing[ds].tipoReporte==='EXTRA'){ var exI=$('ex-'+ds); if(exI) exI.value=existing[ds].horarioReportado||""; var st=rowState(ds); st.ex=true; st.extraHours=existing[ds].horarioReportado||""; setRowState(ds,st); var sub=$('sub-'+ds); if(sub) sub.classList.remove('hidden'); }
+            if(existing[ds].tipoReporte==='MIXTO'){ var parts=(existing[ds].horarioReportado||"").split('+'); var exP=(parts[1]||"").trim(); var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); var sub2=$('sub-'+ds); if(sub2) sub2.classList.remove('hidden'); }
+            if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
+          }
+          var cmInput=$('cm-'+ds); if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
+          var rmEx=$('rmEx-'+ds);
+          var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
+          function autosaveExtra(){ var st=rowState(ds); var val=(exInput&&exInput.value||'').trim(); if(val){ st.ex=true; st.ok=true; st.ab=false; st.extraHours=val; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); } }
+          if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
+          if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
+          if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); var sub=$('sub-'+ds); if(sub) sub.classList.add('hidden'); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+        })(ds,info);
+      }
+      $('submit-month').disabled = lock.locked;
+      $('reset-month').disabled = lock.locked;
     });
+  }
 
-    // 2. Generar filas para cada día del mes
-    for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month, day);
-        const dateString = date.toISOString().substring(0, 10);
-        const dayOfWeek = date.toLocaleDateString('es-ES', { weekday: 'short' });
-        const isPast = dateString < today;
-        const hasReport = reportData[dateString];
-        
-        const row = timesheetBodyEl.insertRow();
-        
-        // Celdas estándar: Día y Horario Habitual
-        row.innerHTML = `
-            <td style="font-weight: bold; background-color: ${isPast ? '#f8f9fa' : 'white'};">${dateString.substring(8)} (${dayOfWeek})</td>
-            <td>${habitualSchedule}</td>
-            <td id="actions-${dateString}" style="text-align: center;">
-                ${generateActionButtons(dateString, isPast, hasReport)}
-            </td>
-        `;
+  function addOrUpdateSingleRow(user, dateStr){
+    var key=currentYM();
+    return Promise.all([ getConfig(user.uid), getOneReport(user.uid, dateStr), getLock(user.uid, key) ]).then(function(arr){
+      var cfg=arr[0], report=arr[1], lock=arr[2];
+      var date=new Date(dateStr);
+      var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
+      var existingTr=$('row-'+dateStr); if(existingTr){ if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); existingTr.remove(); }
+      var built=buildRow(dateStr, date, info.text, info.variable, lock.locked, report, info.skip && report && report.tipoReporte==='EXTRA');
+      var rows=$('rows'); var days=rows.querySelectorAll('tr[id^="row-"]');
+      var inserted=false;
+      for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-',''); if(ds>dateStr){ rows.insertBefore(built[0], days[i]); rows.insertBefore(built[1], days[i]); inserted=true; break; } }
+      if(!inserted){ rows.appendChild(built[0]); rows.appendChild(built[1]); }
+      applyStateToUI(dateStr, info.text, info.variable);
+    });
+  }
 
-        // Si hay reporte, mostrar un resumen
-        if (hasReport) {
-            row.cells[2].innerHTML = `
-                <div style="font-size: 0.8em; font-weight: bold; color: ${hasReport.tipoReporte === 'HABITUAL' ? 'green' : (hasReport.tipoReporte === 'FALTA' ? 'red' : 'blue')};">
-                    ${hasReport.tipoReporte}
-                </div>
-                <span style="font-size: 0.7em;">${hasReport.horarioReportado || hasReport.comentarios || ''}</span>
-            `;
-        }
-    }
+  function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
 
-    document.getElementById('loading-report-msg').classList.add('hidden');
-}
+  function resetMonth(user){
+    var key=currentYM(); var db=firebase.firestore();
+    return db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
+      .then(function(snap){
+        var batch=db.batch(); snap.forEach(function(d){ batch.delete(d.ref); });
+        return batch.commit();
+      })
+      .then(function(){ return db.collection('locks').doc(user.uid+'_'+key).delete().catch(function(){}); })
+      .then(function(){ $('last-update').textContent=new Date().toLocaleString(); paintTable(user); });
+  }
 
-// Ayuda: Genera los botones de acción para cada día
-function generateActionButtons(dateString, isPast, hasReport) {
-    if (isPast && !hasReport) {
-        return '<span style="color:red; font-size:0.8em;">Pendiente</span>';
-    }
-    if (hasReport) {
-        // Si ya tiene reporte, no mostramos botones, solo el resumen (gestionado en loadMonthlyReport)
-        return '';
-    }
-    
-    // Botones disponibles si no hay reporte
-    return `
-        <button class="action-button btn-check" title="Horario Habitual" onclick="saveQuickReport('${dateString}', 'HABITUAL')">✅</button>
-        <button class="action-button btn-cross" title="Ausencia / Falta" onclick="showDetailedInput('${dateString}', 'FALTA')">❌</button>
-        <button class="action-button btn-plus" title="Horas Extra/Diferentes" onclick="showDetailedInput('${dateString}', 'EXTRA')">➕</button>
-    `;
-}
+  $('submit-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    var key=currentYM();
+    setLock(u.uid,key,true).then(function(){ return getLock(u.uid,key); }).then(function(lk){
+      $('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
+      $('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
+      $('submit-month').disabled = lk.locked; $('reset-month').disabled = lk.locked;
+    });
+  });
+  $('reset-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    if(!confirm('¿Resetear la planilla del mes actual? Esto borra los registros del mes.')) return;
+    resetMonth(u);
+  });
 
-// ----------------------------------------------------------------------
-// Lógica de Inputs Detallados (se ejecuta al hacer click en ❌ o ➕)
-// ----------------------------------------------------------------------
-
-// Muestra los campos de texto expandidos debajo de la fila
-function showDetailedInput(dateString, type) {
-    const actionsCell = document.getElementById(`actions-${dateString}`);
-    
-    // Encuentra la fila actual
-    const currentRow = actionsCell.parentNode;
-    
-    // Remover fila de detalle si ya existe (para evitar duplicados)
-    if (document.getElementById(`extra-row-${dateString}`)) {
-        document.getElementById(`extra-row-${dateString}`).remove();
-    }
-    
-    // Insertar una nueva fila debajo de la actual para los inputs
-    const newRow = timesheetBodyEl.insertRow(currentRow.rowIndex + 1);
-    newRow.id = `extra-row-${dateString}`;
-    newRow.classList.add('extra-input-row');
-    
-    const cell = newRow.insertCell(0);
-    cell.colSpan = 3; // Ocupa las 3 columnas
-    
-    const placeholderText = (type === 'EXTRA') 
-        ? "Horario trabajado o cantidad de horas (Ej: 9:00 a 19:00)" 
-        : "Motivo de la ausencia (médico, personal, etc.)";
-        
-    cell.innerHTML = `
-        <div style="padding: 5px;">
-            <input type="text" id="horario-reportado-temp-${dateString}" placeholder="${placeholderText}">
-            <textarea id="comentarios-temp-${dateString}" placeholder="Comentarios"></textarea>
-            <button onclick="saveDetailedReport('${dateString}', '${type}')" style="background-color: ${type === 'EXTRA' ? '#007bff' : '#dc3545'}; margin: 5px 0;">Guardar Reporte</button>
-            <button onclick="loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual)" style="background-color: #6c757d; margin: 5px 0;">Cancelar</button>
-        </div>
-    `;
-    
-    // Ocultar los botones de la fila original temporalmente
-    actionsCell.innerHTML = '<span style="font-size: 0.8em; color: gray;">Detalle Abierto</span>';
-}
-
-// ----------------------------------------------------------------------
-// Lógica de Guardado (Habitual, Detallado y Día Extra)
-// ----------------------------------------------------------------------
-
-// Ayuda para generar el objeto de reporte
-function createReportObject(date, type, horarioReportado = '', comentarios = '') {
-    const user = auth.currentUser;
-    return {
-        userId: user.uid,
-        email: user.email,
-        nombre: employeeNameEl.textContent,
-        mesAnio: date.substring(0, 7),
-        fecha: date,
-        tipoReporte: type,
-        horarioReportado: horarioReportado,
-        comentarios: comentarios,
+  $('nh-save').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    var key=currentYM();
+    var date=$('nh-date').value, range=($('nh-range').value||'').trim(), notes=$('nh-notes').value.trim();
+    var p=parseHM(range);
+    if(!date || !p){ return setMsg($('nh-msg'),'Completá fecha y horario (HH-HH)'); }
+    var hrs=p.start+'-'+p.end;
+    getConfig(u.uid).then(function(cfg){
+      return firebase.firestore().collection('timesheets').doc(u.uid+'_'+date).set({
+        userId:u.uid,email:u.email,nombre:(cfg&&cfg.nombre)||'',
+        fecha:date,mesAnio:key,tipoReporte:'EXTRA',horarioReportado:hrs,comentarios:notes||'Extra en día no habitual',
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    };
-}
+      },{merge:true});
+    }).then(function(){ setMsg($('nh-msg'),'Extra guardada',true); $('last-update').textContent=new Date().toLocaleString(); return addOrUpdateSingleRow(u, date); });
+  });
 
-// 1. Guardado Rápido (Habitual: ✅)
-function saveQuickReport(dateString, type) {
-    // Primero, verifica si el reporte ya existe para evitar duplicados
-    db.collection("timesheets").where("userId", "==", auth.currentUser.uid).where("fecha", "==", dateString).get().then(snapshot => {
-        if (!snapshot.empty) {
-            showMessage(`Ya existe un reporte para el ${dateString}.`, true);
-            return;
-        }
+  $('register-btn').addEventListener('click', function(){
+    firebase.auth().createUserWithEmailAndPassword($('email').value, $('password').value)
+      .then(function(){ setMsg($('auth-msg'),'Cuenta creada',true); })
+      .catch(function(e){ setMsg($('auth-msg'), e.message); });
+  });
+  $('reset-btn').addEventListener('click', function(){
+    var em = ($('email') && $('email').value) || '';
+    if(!em){ return setMsg($('auth-msg'),'Ingresá tu email'); }
+    firebase.auth().sendPasswordResetEmail(em)
+      .then(function(){ setMsg($('auth-msg'),'Email enviado',true); })
+      .catch(function(e){ setMsg($('auth-msg'), e.message); });
+  });
+  $('logout-btn').addEventListener('click', function(){ firebase.auth().signOut(); });
 
-        const reportData = createReportObject(dateString, type, employeeConfig.horarioHabitual, 'Horario habitual reportado.');
-        
-        db.collection("timesheets").add(reportData)
-            .then(() => {
-                showMessage(`✅ Reporte Rápido guardado para ${dateString}.`, false);
-                loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual); // Recargar la lista
-            })
-            .catch((error) => {
-                showMessage(`Error al guardar: ${error.message}`, true);
-            });
-    });
-}
+  $('to-employee').addEventListener('click', function(){
+    $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
+    $('to-employee').classList.remove('ghost'); $('to-admin').classList.add('ghost');
+  });
+  $('to-admin').addEventListener('click', function(){
+    $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
+    $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
+  });
 
-// 2. Guardado Detallado (❌ o ➕)
-function saveDetailedReport(dateString, type) {
-    const horarioReportado = document.getElementById(`horario-reportado-temp-${dateString}`).value;
-    const comentarios = document.getElementById(`comentarios-temp-${dateString}`).value;
-    
-    // Validación más estricta para reporte
-    if (!horarioReportado && type !== 'FALTA') {
-        showMessage('Debes especificar el horario trabajado o las horas extra.', true);
-        return;
+  function onMonthChange(){ paintCurrentUser(); }
+  $('sel-month').addEventListener('change', onMonthChange);
+  $('sel-year').addEventListener('change', onMonthChange);
+
+  firebase.auth().onAuthStateChanged(function(user){
+    if(!user){
+      $('auth-card').classList.remove('hidden'); $('app-card').classList.add('hidden');
+      $('user-email').textContent='—'; $('view-switch').classList.add('hidden'); return;
     }
-    
-    // Primero, verifica si el reporte ya existe para evitar duplicados
-    db.collection("timesheets").where("userId", "==", auth.currentUser.uid).where("fecha", "==", dateString).get().then(snapshot => {
-        if (!snapshot.empty) {
-            showMessage(`Ya existe un reporte para el ${dateString}.`, true);
-            return;
-        }
-        
-        const reportData = createReportObject(dateString, type, horarioReportado, comentarios);
+    $('auth-card').classList.add('hidden'); $('app-card').classList.remove('hidden');
+    $('user-email').textContent=user.email;
 
-        db.collection("timesheets").add(reportData)
-            .then(() => {
-                showMessage(`✅ Reporte Detallado guardado para ${dateString}.`, false);
-                // Cierra y refresca la tabla
-                loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual); 
-            })
-            .catch((error) => {
-                showMessage(`Error al guardar: ${error.message}`, true);
-            });
+    buildMonthSelectors();
+
+    getRole(user.uid).then(function(role){
+      $('role-chip').textContent=role.toUpperCase();
+      if(role==='admin'){
+        $('view-switch').classList.remove('hidden');
+        $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
+        $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
+      }else{
+        $('view-switch').classList.add('hidden');
+        $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
+      }
+      paintTable(user);
     });
-}
+  });
 
-// 3. Guardado de Día Extra (Botón Principal)
-function saveExtraDayTimeSheet() {
-    const date = document.getElementById('extra-report-date').value;
-    const horarioReportado = document.getElementById('extra-horario-reportado').value;
-    const comentarios = document.getElementById('extra-comentarios').value;
+  window.doLogin = function() {
+    const btn = document.getElementById('login-btn');
+    const msg = document.getElementById('auth-msg');
+    const email = (document.getElementById('email')?.value || '').trim();
+    const pass  = (document.getElementById('password')?.value || '');
 
-    if (!date || !horarioReportado) {
-        showMessage("Debes especificar la fecha y el horario trabajado para el día extra.", true);
-        return;
-    }
-    
-    // Verifica que no haya un reporte para esa fecha antes de marcar como DÍA_EXTRA
-    db.collection("timesheets").where("userId", "==", auth.currentUser.uid).where("fecha", "==", date).get().then(snapshot => {
-        if (!snapshot.empty) {
-            showMessage(`Ya existe un reporte para el ${date}. Si quieres editarlo, usa la tabla.`, true);
-            return;
+    if (btn.dataset.loading === '1') return;
+
+    btn.dataset.loading = '1';
+    btn.disabled = true;
+    btn.textContent = 'Ingresando...';
+
+    (async () => {
+      try {
+        if (!firebase?.auth) throw new Error('Firebase no está listo');
+        if (firebase.auth().setPersistence) {
+          await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
         }
-    
-        const reportData = createReportObject(date, 'DIA_EXTRA', horarioReportado, comentarios);
-    
-        db.collection("timesheets").add(reportData)
-            .then(() => {
-                showMessage(`✅ Día Extra reportado para ${date}.`, false);
-                showExtraDayForm(); // Ocultar formulario
-                loadMonthlyReport(auth.currentUser.uid, employeeConfig.horarioHabitual); // Recargar
-            })
-            .catch((error) => {
-                showMessage(`Error al guardar día extra: ${error.message}`, true);
-            });
+        await firebase.auth().signInWithEmailAndPassword(email, pass);
+        msg.textContent = 'Ingreso correcto';
+        msg.style.color = '#86efac';
+      } catch (e) {
+        console.error(e);
+        msg.textContent = e?.message || 'No se pudo ingresar';
+        msg.style.color = '#fecaca';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+        btn.dataset.loading = '0';
+      }
+    })();
+  };
+})();
+
+// --- Universal column aligner (observer-based) ---
+(function(){
+  function toArray(nl){ return Array.prototype.slice.call(nl||[]); }
+  function isActionBtn(el){
+    if(!el || el.tagName!=='BUTTON') return false;
+    var t = (el.textContent || '').trim();
+    if (t === '✓' || t === '✕' || t === '＋' || t === '+') return true;
+    // class hints
+    var c = el.className||'';
+    return /\bicon\b/.test(c) || /\bgood\b/.test(c) || /\bbad\b/.test(c) || /\bblue\b/.test(c);
+  }
+  function fixRow(tr){
+    if(!tr || !tr.id) return;
+    var cells = tr.children; if(!cells || cells.length<5) return;
+    var tdHs=cells[2], tdActs=cells[3], tdCom=cells[4];
+
+    // Move action buttons into tdActs
+    toArray(tr.querySelectorAll('button')).forEach(function(b){
+      if(isActionBtn(b) && b.parentElement !== tdActs){
+        try{ tdActs.appendChild(b); }catch(e){}
+      }
     });
-}
+    if(tdActs && !tdActs.classList.contains('icon-row')) tdActs.classList.add('icon-row');
 
+    // Ensure hs cell only has chips (remove buttons/inputs)
+    toArray(tdHs.querySelectorAll('button,input,textarea,select')).forEach(function(el){
+      try{ el.remove(); }catch(e){}
+    });
 
-// =======================================================
-// === OBSERVADOR DE ESTADO (Maneja las Vistas) ==========
-// =======================================================
-
-auth.onAuthStateChanged((user) => {
-    if (user) {
-        // --- AYUDA PARA DEPURAR EL ADMIN_UID ---
-        console.log("--- CONFIGURACIÓN DE USUARIO ---");
-        console.log("Tu UID actual (user.uid) es:", user.uid);
-        console.log("El ADMIN_UID configurado es:", Nw3h2xXv6beBFe6qD8w0lL2IfOz2);
-        console.log("----------------------------------");
-        // ----------------------------------------
-        
-        // ** PRIMERO VERIFICAR ROL **
-        if (user.uid === ADMIN_UID) {
-            // ROL: ADMINISTRADOR
-            document.getElementById('user-email-display').textContent = user.email;
-            employeeNameEl.textContent = 'ADMINISTRADOR'; // Establecer nombre de forma inmediata
-            horarioHabitualDisplayEl.textContent = 'Gestión de Empleados';
-            
-            authView.classList.add('hidden');
-            privateView.classList.remove('hidden');
-            adminViewEl.classList.remove('hidden'); // Mostrar vista Admin
-            document.getElementById('employee-dashboard').classList.add('hidden'); // Ocultar vista Empleado
-            
-            loadEmployeeList(); // Cargar lista de empleados para gestión
-            showMessage('');
-            return; // Detener la ejecución para Admin
-        }
-        
-        // ** SEGUNDO VERIFICAR EMPLEADO **
-        
-        // Cargar configuración del empleado (necesaria para el nombre/horario)
-        db.collection("employee_config").where("userId", "==", user.uid).get()
-            .then(snapshot => {
-                if (snapshot.empty) {
-                    employeeNameEl.textContent = 'Usuario sin configurar';
-                    horarioHabitualDisplayEl.textContent = 'Horario no asignado. Contacte a RRHH.';
-                    showMessage('⚠️ Tu usuario aún no está configurado por el administrador.', true);
-                    return;
-                }
-                
-                // ROL: EMPLEADO (Configurado)
-                employeeConfig = snapshot.docs[0].data(); // Guardar config globalmente
-                employeeNameEl.textContent = employeeConfig.nombre;
-                horarioHabitualDisplayEl.textContent = employeeConfig.horarioHabitual;
-
-                adminViewEl.classList.add('hidden'); // Ocultar vista Admin
-                document.getElementById('employee-dashboard').classList.remove('hidden'); // Mostrar vista Empleado
-                
-                // Iniciar la carga del reporte mensual para el empleado
-                loadMonthlyReport(user.uid, employeeConfig.horarioHabitual);
-            })
-            .catch(error => {
-                console.error("Error al cargar config: ", error);
-                showMessage('Error al cargar la configuración del empleado.', true);
-            });
-
-        showMessage('');
-    } else {
-        authView.classList.remove('hidden');
-        privateView.classList.add('hidden');
-        document.getElementById('login-form').classList.remove('hidden');
-        document.getElementById('register-form').classList.add('hidden');
+    // Move comment input to tdCom
+    var cm = tr.querySelector('input[id^="cm-"], textarea[id^="cm-"]') || tr.querySelector('input[placeholder*="oment"], textarea[placeholder*="oment"]');
+    if(cm && cm.parentElement !== tdCom){
+      try{ tdCom.innerHTML=''; tdCom.appendChild(cm); }catch(e){}
     }
-});
+  }
+  function sweep(){
+    var rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
+    rows.forEach(fixRow);
+  }
+  // Initial sweeps
+  document.addEventListener('DOMContentLoaded', sweep);
+  setTimeout(sweep, 200); setTimeout(sweep, 600); setTimeout(sweep, 1200);
 
-});
+  // Mutation observer to catch dynamic changes
+  var tgt = document.querySelector('tbody#rows');
+  if (tgt && window.MutationObserver){
+    var mo = new MutationObserver(function(){
+      sweep();
+    });
+    mo.observe(tgt, {childList:true, subtree:true});
+  }
+})();
+// --- end universal column aligner ---
 
-
-
-;try{ fixMisplacedControls(); }catch(e){}
-try{ setInterval(fixMisplacedControls, 600); }catch(e){}
+// vfix-2025.10.18-220505
