@@ -1,269 +1,143 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reporte de Horas Mensuales</title>
-    
-    <!-- Incluye los SDKs de Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    
-    <style>
-        /* Estilos Mobile-First y Responsive */
-        body { 
-            font-family: Arial, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: flex-start;
-            min-height: 100vh; 
-            background-color: #f4f4f4; 
-            margin: 0; 
-            padding: 20px 10px;
-        }
-        .container { 
-            background: white; 
-            padding: 20px; 
-            border-radius: 8px; 
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
-            width: 100%;
-            max-width: 800px; /* Más ancho para la tabla de empleados */
-            text-align: center; 
-            box-sizing: border-box; 
-        }
-        
-        /* Estilos generales de elementos */
-        input, select, textarea, button { 
-            width: 100%; 
-            padding: 10px; 
-            margin: 8px 0; 
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
-            box-sizing: border-box; 
-            font-size: 1em;
-        }
-        button { 
-            color: white; 
-            border: none; 
-            cursor: pointer; 
-            background-color: #5cb85c; 
-            font-weight: bold;
-        }
-        button:hover { 
-            opacity: 0.9; 
-        }
-        .hidden { 
-            display: none; 
-        }
-        .card { 
-            border: 1px solid #ddd; 
-            padding: 15px; 
-            border-radius: 6px; 
-            text-align: left; 
-            margin-bottom: 20px;
-        }
-        .info-box {
-            background-color: #e3f2fd; 
-            color: #1a237e; 
-            padding: 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-
-        /* Estilos para la tabla de reporte mensual (empleado) */
-        .report-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 0.9em;
-        }
-        .report-table th, .report-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-        }
-        .report-table th {
-            background-color: #e9ecef;
-        }
-        .action-button {
-            width: auto;
-            padding: 5px 8px;
-            margin: 2px;
-            font-size: 1.1em;
-            border-radius: 50%;
-            line-height: 1;
-        }
-        .btn-check { background-color: #28a745; } /* Verde */
-        .btn-cross { background-color: #dc3545; } /* Rojo */
-        .btn-plus { background-color: #007bff; }  /* Azul */
-
-        .extra-input-row td {
-            background-color: #f1f8ff;
-            padding: 5px;
-        }
-        .extra-input-row input, .extra-input-row textarea {
-            width: calc(100% - 16px);
-            margin: 5px 0;
-            padding: 5px;
-            font-size: 0.9em;
-        }
-
-        /* Estilos para el área de administración */
-        #admin-view {
-            margin-top: 30px;
-            border-top: 2px dashed #ccc;
-            padding-top: 20px;
-        }
-        #employee-list-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 0.9em;
-        }
-        #employee-list-table th, #employee-list-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        #export-button, #admin-button-new-employee {
-             width: auto;
-             padding: 10px 15px;
-             margin-right: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Control Horario – Panel</title>
+  <style>
+    :root{ --bg:#0f172a; --card:#111827; --muted:#1f2937; --accent:#6366f1;
+           --good:#16a34a; --bad:#dc2626; --text:#e5e7eb; --textmuted:#94a3b8; --chip:#334155; --blue:#2563eb; }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b1223,#0f172a);color:var(--text);
+         font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",sans-serif;}
+    .wrap{max-width:1180px;margin:24px auto;padding:0 16px}
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(99,102,241,.8)}
+    .title{font-size:22px;font-weight:700;letter-spacing:.3px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:14px;box-shadow:0 10px 35px rgba(0,0,0,.25)}
+    .grid{display:grid;gap:16px} .grid-3{grid-template-columns:1fr 1fr 1fr}
+    .pad{padding:16px} .muted{color:var(--textmuted)}
+    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .sp{justify-content:space-between}
+    .btn{background:var(--accent);color:white;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    .btn.small{padding:6px 10px;border-radius:999px} .btn.ghost{background:transparent;border:1px solid #334155}
+    .chip{background:#334155;color:#e5e7eb;padding:4px 8px;border-radius:999px;font-size:12px}
+    .hidden{display:none !important} .msg{margin:10px 0;font-size:14px}
+    input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #1f2937;vertical-align:middle}
+    th{color:#93c5fd;text-align:left;background:#0b1223}
+    .icon{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;font-weight:900;cursor:pointer}
+    .icon.active.good{background:#16a34a;border-color:#16a34a;color:white}
+    .icon.active.bad{background:#dc2626;border-color:#dc2626;color:white}
+    .icon.active.blue{background:#2563eb;border-color:#2563eb;color:white}
+    .icon-row{display:flex;gap:8px;align-items:center}
+    .subrow{background:#0b1223}
+    .trash{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;cursor:pointer}
+    .stack{display:flex;flex-direction:column;gap:4px}
+    .tag{display:inline-block;background:#0b1223;border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:12px}
+  </style>
 </head>
 <body>
-
-<div class="container">
-    <!-- VISTA DE AUTENTICACIÓN (LOGIN/REGISTRO) -->
-    <div id="auth-view">
-        <h2>Reporte de Horas</h2>
-        <p id="message" style="color: red;"></p>
-
-        <!-- Formularios de Auth -->
-        <div id="register-form">
-            <h3>Registrarse</h3>
-            <p>Necesario para que el Administrador asigne tu horario.</p>
-            <input type="email" id="reg-email" placeholder="Correo Electrónico" required>
-            <input type="password" id="reg-password" placeholder="Contraseña (mín. 6 caracteres)" required>
-            <button onclick="registerUser()">Registrar</button>
-            <p>¿Ya tienes cuenta? <a href="#" onclick="showLogin()">Inicia Sesión</a></p>
-        </div>
-        <div id="login-form" class="hidden">
-            <h3>Iniciar Sesión</h3>
-            <input type="email" id="log-email" placeholder="Correo Electrónico" required>
-            <input type="password" id="log-password" placeholder="Contraseña" required>
-            <button onclick="loginUser()">Entrar</button>
-            <p>¿No tienes cuenta? <a href="#" onclick="showRegister()">Regístrate</a></p>
-        </div>
+  <div class="wrap">
+    <div class="brand">
+      <div class="dot"></div>
+      <div class="title">Control Horario · Panel</div>
+      <div class="chip" id="version-chip">v2025.10.18-1452 UTC</div>
+      <div style="flex:1"></div>
+      <div class="muted" id="user-email">—</div>
+      <button class="btn small" id="logout-btn">Salir</button>
     </div>
 
-    <!-- VISTA PRIVADA (DIVIDIDA ENTRE EMPLEADO Y ADMIN) -->
-    <div id="private-view" class="hidden">
-        <h2>Panel de Reporte Mensual</h2>
-        <p>Bienvenido/a: <strong id="employee-name">...</strong> (<span id="user-email-display"></span>)</p>
-
-        <!-- 1. VISTA DE EMPLEADO (Reporte Mensual) -->
-        <div id="employee-dashboard">
-            <!-- Área de Referencia de Horario -->
-            <div class="info-box">
-                Tu horario habitual: <span id="horario-habitual-display">Cargando...</span> | Mes: <strong id="current-month-display"></strong>
-            </div>
-
-            <!-- Botón para días fuera del horario habitual (Extras) -->
-            <button onclick="showExtraDayForm()" style="background-color: #007bff; margin-bottom: 20px;">
-                ➕ Reportar Día Extra (Fin de semana, festivo, etc.)
-            </button>
-
-            <!-- Card para días Extra a reportar -->
-            <div class="card hidden" id="extra-day-form">
-                <h3>Reportar Día Extra</h3>
-                <input type="date" id="extra-report-date" required>
-                <input type="text" id="extra-horario-reportado" placeholder="Horario trabajado (Ej: 9:00 a 14:00)">
-                <textarea id="extra-comentarios" placeholder="Motivo del día extra"></textarea>
-                <button onclick="saveExtraDayTimeSheet()" style="background-color: #ffc107; color: black;">Guardar Día Extra</button>
-            </div>
-
-            <!-- Tabla Dinámica del Mes -->
-            <div class="card">
-                <h3>Jornadas del Mes</h3>
-                <p id="loading-report-msg">Generando calendario...</p>
-                <table class="report-table">
-                    <thead>
-                        <tr>
-                            <th>Día</th>
-                            <th>Horario Hab.</th>
-                            <th>Reporte</th>
-                        </tr>
-                    </thead>
-                    <tbody id="timesheet-body">
-                        <!-- Se llena con JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-
-        <!-- 2. VISTA DE ADMINISTRACIÓN (Gestión) -->
-        <div id="admin-view" class="hidden">
-            <h3>🛠️ Área de Administración</h3>
-            <p>Gestión de empleados, reportes y descarga de datos.</p>
-
-            <!-- Acciones de Admin -->
-            <div class="card">
-                <button onclick="showEmployeeManagement()" style="background-color: #6f42c1;" id="admin-button-manage-employees">
-                    👤 Gestionar Empleados
-                </button>
-                <button onclick="exportToCsv()" id="export-button" style="background-color: #007bff;">
-                    ⬇️ Descargar Todos los Reportes (CSV/Excel)
-                </button>
-            </div>
-
-            <!-- Subvista de Gestión de Empleados -->
-            <div class="card hidden" id="employee-management-view">
-                <h3>Gestión de Usuarios</h3>
-
-                <!-- Formulario para Nuevo Empleado / Blanqueo -->
-                <div class="card">
-                    <h4>➕ Crear/Blanquear Contraseña</h4>
-                    <input type="email" id="admin-employee-email" placeholder="Correo del empleado (para buscar o crear)" required>
-                    <input type="text" id="admin-employee-name" placeholder="Nombre completo (solo para nuevos empleados)">
-                    <input type="text" id="admin-employee-schedule" placeholder="Horario habitual (Ej: L-V 9:00 a 18:00)">
-                    <button onclick="adminCreateOrUpdateEmployee()" style="background-color: #28a745; margin-right: 5px;">Crear/Actualizar Empleado</button>
-                    <button onclick="adminResetPassword()" style="background-color: #ffc107; color: black;">Blanquear Contraseña</button>
-                    <p id="admin-action-message" style="margin-top: 10px;"></p>
-                </div>
-
-
-                <!-- Tabla de Empleados Registrados -->
-                <h4>Listado de Empleados</h4>
-                <p id="loading-employees-msg">Cargando listado...</p>
-                <table id="employee-list-table">
-                    <thead>
-                        <tr>
-                            <th>Nombre</th>
-                            <th>Email</th>
-                            <th>Horario</th>
-                            <th>Ver Reportes</th>
-                        </tr>
-                    </thead>
-                    <tbody id="employee-list-body">
-                        <!-- Llenado con JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <button onclick="logoutUser()" style="background-color: #d9534f; margin-top: 10px;">Cerrar Sesión</button>
+    <div id="view-switch" class="row hidden" style="margin-bottom:8px;justify-content:flex-end">
+      <div class="chip" id="role-chip">—</div>
+      <div style="width:8px"></div>
+      <div>
+        <button class="btn small ghost" id="to-employee">Empleado</button>
+        <button class="btn small" id="to-admin">Admin</button>
+      </div>
     </div>
-</div>
 
-<!-- Enlace al archivo de lógica -->
-<script src="app.js"></script>
+    <div id="auth-card" class="card pad">
+      <div class="row sp"><b>Ingresar</b></div>
+      <div class="grid grid-3" style="grid-template-columns:1fr 1fr auto">
+        <div><label>Email</label><input id="email" type="email" placeholder="tu@email.com"/></div>
+        <div><label>Contraseña</label><input id="password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){doLogin();}"/></div>
+        <div style="align-self:end" class="row">
+          <button class="btn" id="login-btn" onclick="doLogin()">Entrar</button>
+          <button class="btn" id="register-btn">Crear cuenta</button>
+          <button class="btn" id="reset-btn">Blanquear</button>
+        </div>
+      </div>
+      <div class="msg" id="auth-msg"></div>
+    </div>
 
+    <div id="app-card" class="card pad hidden">
+      <!-- EMPLEADO -->
+      <div id="employee-view">
+        <div class="row sp">
+          <div class="row">
+            <div>
+              <label>Mes</label>
+              <div class="row" style="gap:8px">
+                <select id="sel-month"></select>
+                <select id="sel-year"></select>
+              </div>
+            </div>
+            <div class="chip">Última actualización: <span id="last-update">—</span></div>
+            <div class="chip">Estado: <span id="lock-state">—</span></div>
+          </div>
+          <div class="row">
+            <button class="btn" id="submit-month">Enviar planilla</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="pad row sp"><b>Planilla de Horarios</b><div class="muted">Día · Horario habitual · Horas trabajadas · Acciones · Comentario</div></div>
+          <div class="pad" style="padding-top:0">
+            <table>
+              <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card pad" style="margin-top:12px">
+          <b>Horas extra en días no habituales</b>
+          <div class="grid grid-3" style="margin-top:8px">
+            <div><label>Fecha</label><input type="date" id="nh-date"></div>
+            <div><label>Horario (HH-HH)</label><input id="nh-range" placeholder="16-20"></div>
+            <div><label>Comentario</label><input id="nh-notes" placeholder="Guardia / reemplazo"></div>
+          </div>
+          <div class="row" style="margin-top:8px"><button class="btn" id="nh-save">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
+        </div>
+        <div class="msg" id="emp-msg"></div>
+      </div>
+
+      <!-- ADMIN -->
+      <div id="admin-view" class="hidden">
+        <div class="pad"><b>Panel de Administración</b><div class="muted">En cuentas admin se muestra esta vista (oculta para empleados).</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fallback doLogin -->
+  <script>
+    function doLogin(){
+      var btn=document.getElementById('login-btn');
+      var msg=document.getElementById('auth-msg');
+      btn.disabled=true; btn.textContent='Ingresando...';
+      firebase.auth().signInWithEmailAndPassword(
+        document.getElementById('email').value,
+        document.getElementById('password').value
+      ).then(function(){ msg.textContent='Ingreso correcto'; msg.style.color='#86efac'; })
+       .catch(function(e){ console.error(e); msg.textContent=e.message||'No se pudo ingresar'; msg.style.color='#fecaca'; })
+       .finally(function(){ btn.disabled=false; btn.textContent='Entrar'; });
+    }
+  </script>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="app.js?v=v2025.10.18-1452 UTC"></script>
 </body>
 </html>
-
-
