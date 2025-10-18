@@ -6,23 +6,12 @@
   <title>Control Horario – Admin / Empleado</title>
   <style>
     :root{
-      --bg:#0f172a;       /* slate-900 */
-      --card:#111827;     /* gray-900 */
-      --muted:#1f2937;    /* gray-800 */
-      --accent:#2563eb;   /* blue-600 */
-      --good:#16a34a;     /* green-600 */
-      --bad:#dc2626;      /* red-600 */
-      --warn:#d97706;     /* amber-600 */
-      --text:#e5e7eb;     /* gray-200 */
-      --textmuted:#94a3b8;/* slate-400 */
-      --chip:#334155;     /* slate-700 */
+      --bg:#0f172a; --card:#111827; --muted:#1f2937; --accent:#2563eb;
+      --good:#16a34a; --bad:#dc2626; --warn:#d97706; --text:#e5e7eb; --textmuted:#94a3b8; --chip:#334155;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0; background:linear-gradient(180deg,#0b1223,#0f172a);
-      color:var(--text); font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",sans-serif;
-    }
+    body{margin:0;background:linear-gradient(180deg,#0b1223,#0f172a);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",sans-serif;}
     .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
     .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
     .brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(37,99,235,.8)}
@@ -35,23 +24,17 @@
     .muted{color:var(--textmuted)}
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .sp{justify-content:space-between}
-    .btn{
-      background:var(--accent); color:white; border:none; border-radius:10px; padding:10px 14px;
-      font-weight:600; cursor:pointer; transition:transform .05s ease,opacity .15s ease;
-    }
+    .btn{background:var(--accent);color:white;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;transition:transform .05s ease,opacity .15s ease;}
     .btn:active{transform:translateY(1px)}
     .btn.gray{background:#374151}
     .btn.good{background:var(--good)}
     .btn.bad{background:var(--bad)}
     .btn.warn{background:var(--warn)}
-    .btn.small{padding:6px 10px; font-weight:500; border-radius:8px}
+    .btn.small{padding:6px 10px;font-weight:500;border-radius:8px}
     .segmented{background:#0b1223;border:1px solid #1f2937;border-radius:12px;padding:4px;display:inline-flex;gap:4px}
     .segmented button{background:transparent;color:var(--textmuted);padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
     .segmented button.active{background:var(--accent);color:white}
-    input,select,textarea{
-      background:#0b1223;border:1px solid #1f2937;color:var(--text);
-      padding:10px 12px;border-radius:10px; width:100%;
-    }
+    input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:var(--text);padding:10px 12px;border-radius:10px;width:100%}
     label{font-size:12px;color:var(--textmuted);display:block;margin:8px 2px}
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid #1f2937}
@@ -62,6 +45,8 @@
     .kpi{display:flex;gap:12px;flex-wrap:wrap}
     .kpi .item{background:#0b1223;border:1px solid #1f2937;border-radius:12px;padding:10px 12px}
     .danger{color:#fecaca}
+    .grid-7{display:grid;grid-template-columns:repeat(7,1fr);gap:12px}
+    .tiny{font-size:12px}
   </style>
 </head>
 <body>
@@ -86,14 +71,8 @@
         </div>
       </div>
       <div class="grid grid-2" style="margin-top:10px">
-        <div>
-          <label>Email</label>
-          <input id="email" type="email" placeholder="tu@email.com"/>
-        </div>
-        <div>
-          <label>Contraseña</label>
-          <input id="password" type="password" placeholder="••••••••"/>
-        </div>
+        <div><label>Email</label><input id="email" type="email" placeholder="tu@email.com"/></div>
+        <div><label>Contraseña</label><input id="password" type="password" placeholder="••••••••"/></div>
       </div>
       <div class="row" style="margin-top:10px">
         <button class="btn" id="login-btn">Entrar</button>
@@ -105,7 +84,6 @@
 
     <!-- APP -->
     <div id="app-card" class="card pad hidden">
-
       <!-- SWITCH VIEW -->
       <div class="row sp" style="margin-bottom:10px">
         <div class="row">
@@ -124,9 +102,7 @@
         <div class="grid grid-3">
           <div class="kpi item">
             <div class="item"><div class="muted">Empleado</div><div id="emp-name" style="font-weight:700">—</div></div>
-            <div class="item"><div class="muted">Horario habitual</div><div id="emp-sched">—</div></div>
-          </div>
-          <div></div><div></div>
+          </div><div></div><div></div>
         </div>
 
         <div class="row" style="margin:12px 0">
@@ -139,18 +115,18 @@
           <div class="row sp"><b>Nuevo reporte puntual</b><button class="btn small gray" id="close-extra">Cerrar</button></div>
           <div class="grid grid-3" style="margin-top:8px">
             <div><label>Fecha</label><input type="date" id="extra-date"></div>
-            <div><label>Horario trabajado</label><input id="extra-hours" placeholder="9:00 a 18:00"></div>
+            <div><label>Horario trabajado</label><input id="extra-hours" placeholder="09:00-18:00"></div>
             <div><label>Comentarios</label><input id="extra-notes" placeholder="Guardia, reemplazo, etc."></div>
           </div>
           <div class="row" style="margin-top:8px"><button class="btn" id="save-extra">Guardar</button><div class="msg" id="extra-msg"></div></div>
         </div>
 
         <div class="card">
-          <div class="pad row sp"><b>Reporte mensual</b><div class="muted">Haz clic para marcar cada día</div></div>
+          <div class="pad row sp"><b>Reporte mensual</b><div class="muted">Día (nombre completo) · Horario habitual · Cant. hs · Estado/Acción</div></div>
           <div class="pad" style="padding-top:0">
             <table>
               <thead>
-                <tr><th>Día</th><th>Horario habitual</th><th>Estado / Acción</th></tr>
+                <tr><th>Día</th><th>Horario habitual</th><th>Cant. hs trabajadas</th><th>Estado / Acción</th></tr>
               </thead>
               <tbody id="tbl-body"></tbody>
             </table>
@@ -160,46 +136,124 @@
 
       <!-- ADMIN VIEW -->
       <div id="admin-view" class="hidden">
-        <div class="grid grid-2">
-          <div class="card pad">
-            <b>Gestión de empleados</b>
-            <div class="grid grid-3" style="margin-top:10px">
-              <div><label>Email</label><input id="adm-email" placeholder="empleado@ejemplo.com"></div>
-              <div><label>Nombre</label><input id="adm-name" placeholder="Nombre y Apellido"></div>
-              <div><label>Horario habitual</label><input id="adm-sched" placeholder="L-V 9-18"></div>
-            </div>
-            <div class="row" style="margin-top:10px">
-              <button class="btn" id="adm-upsert">Crear/Actualizar</button>
-              <button class="btn warn" id="adm-reset">Blanquear contraseña</button>
-              <div class="msg" id="adm-msg"></div>
-            </div>
+        <div class="card pad">
+          <b>Gestión de empleados</b>
+          <div class="grid grid-3" style="margin-top:10px">
+            <div><label>UID usuario</label><input id="adm-uid" placeholder="UID exacto"></div>
+            <div><label>Email</label><input id="adm-email" placeholder="empleado@ejemplo.com"></div>
+            <div><label>Nombre</label><input id="adm-name" placeholder="Nombre y Apellido"></div>
           </div>
-          <div class="card pad">
-            <b>Bloqueo mensual</b>
-            <div class="grid grid-3" style="margin-top:8px">
-              <div><label>UID empleado</label><input id="adm-lock-uid" placeholder="uid..."></div>
-              <div><label>Mes (YYYY-MM)</label><input id="adm-lock-month" placeholder="2025-10"></div>
-              <div class="row" style="align-items:end">
-                <button class="btn bad" id="adm-unlock">Permitir cambios</button>
-                <button class="btn good" id="adm-lock">Bloquear</button>
+
+          <div class="row" style="margin-top:8px"><b>Horario por día</b> <span class="tiny muted">(marcá “No trabaja” o “Variable” cuando corresponda)</span></div>
+          <div class="grid-7">
+            <!-- One mini-card per weekday -->
+            <div class="card pad">
+              <b class="tiny">Lunes</b>
+              <label>Inicio</label><input id="mon-start" placeholder="09:00">
+              <label>Fin</label><input id="mon-end" placeholder="18:00">
+              <div class="row">
+                <label><input type="checkbox" id="mon-off"> No trabaja</label>
+                <label><input type="checkbox" id="mon-var"> Variable</label>
               </div>
             </div>
-            <div class="msg" id="lock-msg"></div>
+            <div class="card pad">
+              <b class="tiny">Martes</b>
+              <label>Inicio</label><input id="tue-start" placeholder="09:00">
+              <label>Fin</label><input id="tue-end" placeholder="18:00">
+              <div class="row">
+                <label><input type="checkbox" id="tue-off"> No trabaja</label>
+                <label><input type="checkbox" id="tue-var"> Variable</label>
+              </div>
+            </div>
+            <div class="card pad">
+              <b class="tiny">Miércoles</b>
+              <label>Inicio</label><input id="wed-start" placeholder="09:00">
+              <label>Fin</label><input id="wed-end" placeholder="18:00">
+              <div class="row">
+                <label><input type="checkbox" id="wed-off"> No trabaja</label>
+                <label><input type="checkbox" id="wed-var"> Variable</label>
+              </div>
+            </div>
+            <div class="card pad">
+              <b class="tiny">Jueves</b>
+              <label>Inicio</label><input id="thu-start" placeholder="09:00">
+              <label>Fin</label><input id="thu-end" placeholder="18:00">
+              <div class="row">
+                <label><input type="checkbox" id="thu-off"> No trabaja</label>
+                <label><input type="checkbox" id="thu-var"> Variable</label>
+              </div>
+            </div>
+            <div class="card pad">
+              <b class="tiny">Viernes</b>
+              <label>Inicio</label><input id="fri-start" placeholder="09:00">
+              <label>Fin</label><input id="fri-end" placeholder="18:00">
+              <div class="row">
+                <label><input type="checkbox" id="fri-off"> No trabaja</label>
+                <label><input type="checkbox" id="fri-var"> Variable</label>
+              </div>
+            </div>
+            <div class="card pad">
+              <b class="tiny">Sábado</b>
+              <label>Inicio</label><input id="sat-start" placeholder="">
+              <label>Fin</label><input id="sat-end" placeholder="">
+              <div class="row">
+                <label><input type="checkbox" id="sat-off"> No trabaja</label>
+                <label><input type="checkbox" id="sat-var"> Variable</label>
+              </div>
+            </div>
+            <div class="card pad">
+              <b class="tiny">Domingo</b>
+              <label>Inicio</label><input id="sun-start" placeholder="">
+              <label>Fin</label><input id="sun-end" placeholder="">
+              <div class="row">
+                <label><input type="checkbox" id="sun-off"> No trabaja</label>
+                <label><input type="checkbox" id="sun-var"> Variable</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-3" style="margin-top:10px">
+            <div><label>Horario habitual (texto opcional)</label><input id="adm-sched" placeholder="L-V 9-18"></div>
+            <div><label class="tiny">Tip: podés dejar un día como “Variable” para que el empleado complete horas.</label></div>
+            <div></div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="adm-upsert">Crear/Actualizar</button>
+            <button class="btn warn" id="adm-reset">Blanquear contraseña</button>
+            <div class="msg" id="adm-msg"></div>
           </div>
         </div>
 
         <div class="card pad" style="margin-top:12px">
           <div class="row sp">
             <b>Listado de empleados</b>
-            <button class="btn gray" id="export-csv">Exportar CSV</button>
+            <div class="row">
+              <label>Mes</label><input type="month" id="adm-month">
+              <button class="btn gray" id="adm-refresh">Actualizar</button>
+              <button class="btn gray" id="export-csv">Exportar CSV</button>
+            </div>
           </div>
           <div class="pad" style="padding-top:0">
             <table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Horario</th><th>UID</th><th>Acciones</th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Horario</th><th>UID</th><th>Estado mes</th><th>Acciones</th></tr></thead>
               <tbody id="adm-list"></tbody>
             </table>
             <div class="msg" id="adm-list-msg"></div>
           </div>
+        </div>
+
+        <div class="card pad" style="margin-top:12px">
+          <b>Bloqueo mensual manual</b>
+          <div class="grid grid-3" style="margin-top:8px">
+            <div><label>UID empleado</label><input id="adm-lock-uid" placeholder="uid..."></div>
+            <div><label>Mes (YYYY-MM)</label><input id="adm-lock-month" placeholder="2025-10"></div>
+            <div class="row" style="align-items:end">
+              <button class="btn bad" id="adm-unlock">Permitir cambios</button>
+              <button class="btn good" id="adm-lock">Bloquear</button>
+            </div>
+          </div>
+          <div class="msg" id="lock-msg"></div>
         </div>
       </div>
     </div>
