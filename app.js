@@ -76,11 +76,12 @@
     if(!o.start || !o.end) return {text:"", variable:false, skip:false};
     return {text:o.start+"-"+o.end, variable:false, skip:false};
   }
-  function rowState(ds){ var r=$('row-'+ds); return r? JSON.parse(r.getAttribute('data-state')||'{}') : {}; }
-  function setRowState(ds, st){ var r=$('row-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
+  function rowState(ds){ var r=$('row-main-'+ds); return r? JSON.parse(r.getAttribute('data-state')||'{}') : {}; }
+  function setRowState(ds, st){ var r=$('row-main-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
 
   function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
-    var tr=document.createElement('tr'); tr.id='row-'+ds;
+    // Fila Principal: DÍA, HORARIO HABITUAL, HS TRABAJADAS
+    var trMain=document.createElement('tr'); trMain.id='row-main-'+ds;
 
     var td1=document.createElement('td'); 
     var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
@@ -102,7 +103,22 @@
     td3.className='stack muted'; 
     td3.innerHTML='<span class="tag">—</span>';
 
-    var td4=document.createElement('td'); 
+    // Se agregan celdas vacías para mantener la estructura de 5 columnas en la fila principal
+    trMain.appendChild(td1); 
+    trMain.appendChild(td2); 
+    trMain.appendChild(td3); 
+    trMain.appendChild(document.createElement('td')); // Vacío para ACCIONES
+    trMain.appendChild(document.createElement('td')); // Vacío para COMENTARIO
+
+    // Fila de Acciones/Comentario: Se inserta inmediatamente debajo
+    var trActions=document.createElement('tr'); trActions.id='row-actions-'+ds; trActions.className='subrow';
+
+    // Celdas vacías para las primeras 3 columnas (DÍA, HORARIO, HS TRABAJADAS)
+    trActions.appendChild(document.createElement('td'));
+    trActions.appendChild(document.createElement('td'));
+    trActions.appendChild(document.createElement('td'));
+
+    var td4=document.createElement('td'); // ACCIONES
     td4.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
     var ab=document.createElement('button'); ab.id='ab-'+ds; ab.className='icon bad'; ab.textContent='✕'; if(locked||isOffExtraOnly) ab.disabled=true;
@@ -118,12 +134,14 @@
       });
     }
 
-    var td5=document.createElement('td'); 
+    var td5=document.createElement('td'); // COMENTARIO
     var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
     td5.appendChild(cm);
+    
+    trActions.appendChild(td4); 
+    trActions.appendChild(td5);
 
-    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
-
+    // Fila de Extra: Se mantiene la lógica original, pero la ocultaremos en el manejador de eventos
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML= ''
       + '<td>Extra</td>'
@@ -146,17 +164,22 @@
       if(existing.tipoReporte==='MIXTO'){ st.ok=true; st.ex=true; var parts=(existing.horarioReportado||"").split('+'); st.extraHours=(parts[1]||"").trim(); }
     }
     setRowState(ds, st);
-    return [tr, sub];
+    return [trMain, trActions, sub]; // Ahora devuelve 3 filas
   }
 
   function applyStateToUI(ds, habitual, variable){
     var st=rowState(ds);
     var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds);
     var hrsEx = document.getElementById('hrsEx-'+ds) || null;
+    var trExtra=$('sub-'+ds); // Fila de Extra
 
     if(ok) ok.classList.toggle('active', !!st.ok);
     if(ab) ab.classList.toggle('active', !!st.ab);
     if(exb) exb.classList.toggle('active', !!st.ex);
+    
+    // Control de visibilidad de la fila de extra
+    if(trExtra) trExtra.classList.toggle('hidden', !st.ex);
+
     if(exInput && st.extraHours) exInput.value = st.extraHours;
     if($('cmEx-'+ds) && st.cmExtra) $('cmEx-'+ds).value = st.cmExtra;
 
@@ -190,6 +213,9 @@
       var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
     }
   }
+  
+  // La función persistState y el resto del archivo se mantienen iguales,
+  // pero corregimos las referencias a la fila principal de 'row-' a 'row-main-'
 
   function persistState(user, ds, key, habitual, variable){
     var st=rowState(ds);
@@ -223,18 +249,22 @@
         var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
         if(info.skip && !hasExisting) continue;
         var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
-        var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
+        var trMain=built[0], trActions=built[1], trSub=built[2]; 
+        rows.appendChild(trMain); 
+        rows.appendChild(trActions);
+        rows.appendChild(trSub);
         (function(ds,info){
           var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
           if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(exb) exb.addEventListener('click', function(){ var row=$('sub-'+ds); if(row) row.classList.toggle('hidden'); var st=rowState(ds); st.ex=!row.classList.contains('hidden'); setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
+          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); }); // No se necesita toggleClass('hidden') aquí, ya lo hace applyStateToUI
           applyStateToUI(ds,info.text,info.variable);
           if(existing[ds]){
             var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
-            if(existing[ds].tipoReporte==='EXTRA'){ var exI=$('ex-'+ds); if(exI) exI.value=existing[ds].horarioReportado||""; var st=rowState(ds); st.ex=true; st.extraHours=existing[ds].horarioReportado||""; setRowState(ds,st); var sub=$('sub-'+ds); if(sub) sub.classList.remove('hidden'); }
-            if(existing[ds].tipoReporte==='MIXTO'){ var parts=(existing[ds].horarioReportado||"").split('+'); var exP=(parts[1]||"").trim(); var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); var sub2=$('sub-'+ds); if(sub2) sub2.classList.remove('hidden'); }
+            if(existing[ds].tipoReporte==='EXTRA'){ var exI=$('ex-'+ds); if(exI) exI.value=existing[ds].horarioReportado||""; var st=rowState(ds); st.ex=true; st.extraHours=existing[ds].horarioReportado||""; setRowState(ds,st); }
+            if(existing[ds].tipoReporte==='MIXTO'){ var parts=(existing[ds].horarioReportado||"").split('+'); var exP=(parts[1]||"").trim(); var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); }
             if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
+            applyStateToUI(ds,info.text,info.variable); // Vuelve a aplicar estado para visibilidad de extra
           }
           var cmInput=$('cm-'+ds); if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
           var rmEx=$('rmEx-'+ds);
@@ -242,7 +272,7 @@
           function autosaveExtra(){ var st=rowState(ds); var val=(exInput&&exInput.value||'').trim(); if(val){ st.ex=true; st.ok=true; st.ab=false; st.extraHours=val; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); } }
           if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
           if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
-          if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); var sub=$('sub-'+ds); if(sub) sub.classList.add('hidden'); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
         })(ds,info);
       }
       $('submit-month').disabled = lock.locked;
@@ -256,15 +286,35 @@
       var cfg=arr[0], report=arr[1], lock=arr[2];
       var date=new Date(dateStr);
       var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
-      var existingTr=$('row-'+dateStr); if(existingTr){ if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); existingTr.remove(); }
+      
+      // Eliminar las 3 filas existentes para el día
+      var existingTrMain=$('row-main-'+dateStr); 
+      if(existingTrMain){ 
+        if(existingTrMain.nextSibling) existingTrMain.nextSibling.remove(); 
+        if(existingTrMain.nextSibling) existingTrMain.nextSibling.remove(); 
+        existingTrMain.remove(); 
+      }
+      
       var built=buildRow(dateStr, date, info.text, info.variable, lock.locked, report, info.skip && report && report.tipoReporte==='EXTRA');
-      var rows=$('rows'); var days=rows.querySelectorAll('tr[id^="row-"]');
+      var rows=$('rows'); var days=rows.querySelectorAll('tr[id^="row-main-"]');
       var inserted=false;
-      for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-',''); if(ds>dateStr){ rows.insertBefore(built[0], days[i]); rows.insertBefore(built[1], days[i]); inserted=true; break; } }
-      if(!inserted){ rows.appendChild(built[0]); rows.appendChild(built[1]); }
+      for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-main-',''); if(ds>dateStr){ 
+        rows.insertBefore(built[0], days[i]); 
+        rows.insertBefore(built[1], days[i]); 
+        rows.insertBefore(built[2], days[i]); 
+        inserted=true; break; 
+      } }
+      if(!inserted){ 
+        rows.appendChild(built[0]); 
+        rows.appendChild(built[1]); 
+        rows.appendChild(built[2]); 
+      }
       applyStateToUI(dateStr, info.text, info.variable);
     });
   }
+  
+  // El resto de funciones (persistState, paintTable, etc.) usan rowState(ds)
+  // que ya apunta a 'row-main-'
 
   function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
 
@@ -396,6 +446,8 @@
 })();
 
 // --- Universal column aligner (observer-based) ---
+// NOTA: Este bloque se mantiene, pero ya no es estrictamente necesario 
+// para la parte de acciones/comentario, solo para limpiar botones en otras celdas.
 (function(){
   function toArray(nl){ return Array.prototype.slice.call(nl||[]); }
   function isActionBtn(el){
@@ -407,9 +459,12 @@
     return /\bicon\b/.test(c) || /\bgood\b/.test(c) || /\bbad\b/.test(c) || /\bblue\b/.test(c);
   }
   function fixRow(tr){
-    if(!tr || !tr.id) return;
+    // Ajustado para manejar el nuevo ID 'row-main-' y la estructura de doble fila
+    if(!tr || !tr.id || !tr.id.startsWith('row-actions-')) return;
+    
     var cells = tr.children; if(!cells || cells.length<5) return;
-    var tdHs=cells[2], tdActs=cells[3], tdCom=cells[4];
+    // Las celdas 0, 1 y 2 están vacías. 
+    var tdActs=cells[3], tdCom=cells[4]; 
 
     // Move action buttons into tdActs
     toArray(tr.querySelectorAll('button')).forEach(function(b){
@@ -419,19 +474,27 @@
     });
     if(tdActs && !tdActs.classList.contains('icon-row')) tdActs.classList.add('icon-row');
 
-    // Ensure hs cell only has chips (remove buttons/inputs)
-    toArray(tdHs.querySelectorAll('button,input,textarea,select')).forEach(function(el){
-      try{ el.remove(); }catch(e){}
-    });
-
-    // Move comment input to tdCom
+    // Mover el campo de comentario al tdCom (aunque ya debería estar ahí)
     var cm = tr.querySelector('input[id^="cm-"], textarea[id^="cm-"]') || tr.querySelector('input[placeholder*="oment"], textarea[placeholder*="oment"]');
     if(cm && cm.parentElement !== tdCom){
       try{ tdCom.innerHTML=''; tdCom.appendChild(cm); }catch(e){}
     }
+    
+    // Si la celda de horas trabajadas (en la fila principal) tiene inputs, eliminarlos
+    var mainRowId = tr.id.replace('row-actions-', 'row-main-');
+    var mainRow = document.getElementById(mainRowId);
+    if (mainRow) {
+      var tdHs = mainRow.children[2];
+      if(tdHs) {
+        toArray(tdHs.querySelectorAll('button,input,textarea,select')).forEach(function(el){
+          try{ el.remove(); }catch(e){}
+        });
+      }
+    }
   }
   function sweep(){
-    var rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
+    // Buscamos solo las filas de acciones/comentario
+    var rows = document.querySelectorAll('tbody#rows tr[id^="row-actions-"]');
     rows.forEach(fixRow);
   }
   // Initial sweeps
@@ -441,12 +504,15 @@
   // Mutation observer to catch dynamic changes
   var tgt = document.querySelector('tbody#rows');
   if (tgt && window.MutationObserver){
-    var mo = new MutationObserver(function(){
-      sweep();
+    var mo = new MutationObserver(function(mutations){
+      // Sólo llamamos a sweep si se añadió un nuevo TR (para evitar loops)
+      if (mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0)) {
+         sweep();
+      }
     });
-    mo.observe(tgt, {childList:true, subtree:true});
+    mo.observe(tgt, {childList:true, subtree:false});
   }
 })();
 // --- end universal column aligner ---
 
-// vfix-2025.10.18-220505
+// vfix-2025.10.18-220505-double-row
