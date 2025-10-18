@@ -69,9 +69,9 @@
       <div class="row sp"><b>Ingresar</b></div>
       <div class="grid grid-3" style="grid-template-columns:1fr 1fr auto">
         <div><label>Email</label><input id="email" type="email" placeholder="tu@email.com"/></div>
-        <div><label>Contraseña</label><input id="password" type="password" placeholder="••••••••"/></div>
+        <div><label>Contraseña</label><input id="password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){doLogin()}"/></div>
         <div style="align-self:end" class="row">
-          <button class="btn" id="login-btn">Entrar</button>
+          <button class="btn" id="login-btn" onclick="doLogin()">Entrar</button>
           <button class="btn blue" id="register-btn">Crear cuenta</button>
           <button class="btn bad" id="reset-btn">Blanquear</button>
         </div>

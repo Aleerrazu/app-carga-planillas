@@ -186,50 +186,22 @@ async function paintTable(user){
   document.getElementById('submit-month').disabled = lock.locked;
 }
 
-window.saveMixed = async (ds)=>{
-  const user = auth.currentUser; if(!user) return;
-  const key = document.getElementById('emp-month').value || ym(new Date());
-  const st = rowState(ds); st.ex = true; st.ok = true; st.ab = false; st.extraHours = (document.getElementById('ex-'+ds)?.value||"").trim(); setRowState(ds,st);
-  document.getElementById('sub-'+ds).classList.add('hidden');
-  const cfg = await getConfig(user.uid); const date = new Date(ds);
-  const info = habitualForDay((cfg?.scheduleByDay)||{}, date);
-  applyStateToUI(ds, info.text, info.variable);
-  await persistState(user, ds, key, info.text, info.variable);
+// Global login function to ensure button works
+window.doLogin = async function doLogin(){
+  const btn = document.getElementById('login-btn');
+  const msg = document.getElementById('auth-msg');
+  try{
+    btn.disabled = true; btn.textContent = "Ingresando...";
+    await auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value);
+    setMsg(msg, "Ingreso correcto", true);
+  }catch(e){
+    console.error("Login error:", e);
+    setMsg(msg, e.message || "No se pudo ingresar");
+  }finally{
+    btn.disabled = false; btn.textContent = "Entrar";
+  }
 };
 
-document.getElementById('nh-save').onclick = async ()=>{
-  const user = auth.currentUser; if(!user) return;
-  const key = document.getElementById('emp-month').value || ym(new Date());
-  const date = document.getElementById('nh-date').value; const h1 = document.getElementById('nh-from').value; const h2 = document.getElementById('nh-to').value; const notes = document.getElementById('nh-notes').value.trim();
-  if(!date || h1==="" || h2===""){ setMsg(document.getElementById('nh-msg'), 'Fecha y horas requeridas'); return; }
-  const hrs = `${String(h1).padStart(2,'0')}:00-${String(h2).padStart(2,'0')}:00`;
-  const cfg = await getConfig(user.uid);
-  await db.collection('timesheets').doc(`${user.uid}_${date}`).set({
-    userId:user.uid, email:user.email, nombre: cfg?.nombre||'',
-    fecha: date, mesAnio: key, tipoReporte: 'EXTRA', horarioReportado: hrs, comentarios: notes||'Extra en día no habitual',
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  }, {merge:true});
-  setMsg(document.getElementById('nh-msg'), 'Extra guardada', true);
-  document.getElementById('last-update').textContent = new Date().toLocaleString();
-  await paintTable(user);
-};
-
-document.getElementById('submit-month').onclick = async ()=>{
-  const user = auth.currentUser; if(!user) return;
-  const key = document.getElementById('emp-month').value || ym(new Date());
-  await setLock(user.uid, key, true);
-  const lk = await getLock(user.uid, key);
-  document.getElementById('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
-  document.getElementById('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
-  document.getElementById('submit-month').disabled = lk.locked;
-};
-
-document.getElementById('emp-month').onchange = ()=>{ const u=auth.currentUser; if(u) paintTable(u); };
-
-// Auth & toggles
-document.getElementById('login-btn')?.addEventListener('click', async ()=>{
-  try{ await auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value); document.getElementById('auth-msg').textContent=''; }catch(e){ setMsg(document.getElementById('auth-msg'), e.message); }
-});
 document.getElementById('register-btn')?.addEventListener('click', async ()=>{
   try{ await auth.createUserWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value); setMsg(document.getElementById('auth-msg'), 'Cuenta creada', true);}catch(e){ setMsg(document.getElementById('auth-msg'), e.message); }
 });
