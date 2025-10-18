@@ -85,17 +85,36 @@
   function rowState(ds){ var r=$('row-'+ds); return r? JSON.parse(r.getAttribute('data-state')||'{}') : {}; }
   function setRowState(ds, st){ var r=$('row-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
 
+  
   function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
     var tr=document.createElement('tr'); tr.id='row-'+ds;
 
-    var td1=document.createElement('td'); var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); td1.appendChild(b);
+    // Columna 1: Día
+    var td1=document.createElement('td'); 
+    var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
+    td1.appendChild(b);
+
+    // Columna 2: Horario habitual (texto o input si variable)
     var td2=document.createElement('td');
-    if(variable){ var inp=document.createElement('input'); inp.id='var-'+ds; inp.placeholder='HH:MM-HH:MM'; if(locked) inp.disabled=true; td2.appendChild(inp); }
-    else{ td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); }
+    if(variable){ 
+      var inp=document.createElement('input'); 
+      inp.id='var-'+ds; 
+      inp.placeholder='HH:MM-HH:MM'; 
+      if(locked) inp.disabled=true; 
+      td2.appendChild(inp); 
+    } else { 
+      td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); 
+    }
 
-    var td3=document.createElement('td'); td3.id='hrs-'+ds; td3.className='stack muted'; td3.innerHTML='<span class="tag">—</span>';
+    // Columna 3: HS TRABAJADAS (solo chips, nunca inputs)
+    var td3=document.createElement('td'); 
+    td3.id='hrs-'+ds; 
+    td3.className='stack muted'; 
+    td3.innerHTML='<span class="tag">—</span>';
 
-    var td4=document.createElement('td'); td4.className='icon-row';
+    // Columna 4: ACCIONES (✓ ✕ ＋ siempre acá)
+    var td4=document.createElement('td'); 
+    td4.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
     var ab=document.createElement('button'); ab.id='ab-'+ds; ab.className='icon bad'; ab.textContent='✕'; if(locked||isOffExtraOnly) ab.disabled=true;
     var ex=document.createElement('button'); ex.id='exbtn-'+ds; ex.className='icon blue'; ex.textContent='＋'; if(locked) ex.disabled=true;
@@ -110,17 +129,28 @@
       });
     }
 
-    var td5=document.createElement('td'); var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; td5.appendChild(cm);
+    // Columna 5: Comentario
+    var td5=document.createElement('td'); 
+    var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
+    td5.appendChild(cm);
 
     tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
 
+    // Subfila "Extra" (5 columnas) sin botón Guardar (auto-guardado)
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
-    sub.innerHTML='<td>Extra</td>'+
-                  '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'+
-                  '<td id="hrsEx-'+ds+'" class="muted">—</td>'+
-                  '<td class="icon-row"><button class="btn small" id="saveEx-'+ds+'">Guardar</button><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'+
-                  '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
-    if(locked){ var s1=sub.querySelector('#saveEx-'+ds), s2=sub.querySelector('#rmEx-'+ds); if(s1) s1.disabled=true; if(s2) s2.disabled=true; }
+    sub.innerHTML= ''
+      + '<td>Extra</td>'
+      + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'
+      + '<td id="hrsEx-'+ds+'" class="muted">—</td>'
+      + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'
+      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
+
+    if(locked){ 
+      var rm = sub.querySelector('#rmEx-'+ds); 
+      if(rm) rm.disabled=true; 
+      var exInp = sub.querySelector('#ex-'+ds); if(exInp) exInp.disabled=true;
+      var cmEx = sub.querySelector('#cmEx-'+ds); if(cmEx) cmEx.disabled=true;
+    }
 
     var st={ok:false,ab:false,ex:false,extraHours:"",comment:(existing&&existing.comentarios)||"",cmExtra:""};
     if(existing){
@@ -132,6 +162,7 @@
     setRowState(ds, st);
     return [tr, sub];
   }
+
 
   function applyStateToUI(ds, habitual, variable){
     var st=rowState(ds);
