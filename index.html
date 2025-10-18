@@ -90,7 +90,7 @@
       <!-- SWITCH VIEW -->
       <div class="row sp" style="margin-bottom:10px">
         <div class="row">
-          <div class="chip">Mes: <span id="month-chip"></span></div>
+          <div class="chip">Mes: <span id="month-chip">—</span></div>
           <div class="chip">Última actualización: <span id="last-update-chip">—</span></div>
           <div class="chip">Bloqueo: <span id="lock-chip">—</span></div>
         </div>
@@ -108,8 +108,8 @@
           </div><div></div><div></div>
         </div>
         <div class="card pad" style="margin-top:12px">
-          <b>Vista empleado (la mejoramos luego)</b>
-          <div class="muted tiny">Ahora nos enfocamos en la parte de Admin como pediste.</div>
+          <b>Vista empleado (luego la completamos)</b>
+          <div class="muted tiny">Ahora estamos enfocando la parte Admin.</div>
         </div>
       </div>
 
@@ -156,7 +156,10 @@
         <div id="admin-schedules" class="hidden">
           <div class="grid grid-2">
             <div class="card pad">
-              <b>Seleccionar empleado</b>
+              <div class="row sp">
+                <b>Seleccionar empleado</b>
+                <button class="btn gray small" id="sched-refresh">Actualizar lista</button>
+              </div>
               <div class="list" id="sched-users"></div>
               <div class="msg" id="sched-users-msg"></div>
             </div>

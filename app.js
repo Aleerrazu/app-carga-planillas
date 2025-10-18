@@ -47,9 +47,21 @@ const adminEmployees = $("admin-employees");
 const adminSchedules = $("admin-schedules");
 const adminMonth     = $("admin-month");
 if(tabEmp&&tabSch&&tabMon){
-  tabEmp.onclick = ()=>{ tabEmp.classList.add("active"); tabSch.classList.remove("active"); tabMon.classList.remove("active"); adminEmployees.classList.remove("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.add("hidden"); };
-  tabSch.onclick = ()=>{ tabSch.classList.add("active"); tabEmp.classList.remove("active"); tabMon.classList.remove("active"); adminEmployees.classList.add("hidden"); adminSchedules.classList.remove("hidden"); adminMonth.classList.add("hidden"); };
-  tabMon.onclick = ()=>{ tabMon.classList.add("active"); tabEmp.classList.remove("active"); tabSch.classList.remove("active"); adminEmployees.classList.add("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.remove("hidden"); };
+  tabEmp.onclick = async ()=>{
+    tabEmp.classList.add("active"); tabSch.classList.remove("active"); tabMon.classList.remove("active");
+    adminEmployees.classList.remove("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.add("hidden");
+    await loadAdminEmployees(); // refresca al entrar
+  };
+  tabSch.onclick = async ()=>{
+    tabSch.classList.add("active"); tabEmp.classList.remove("active"); tabMon.classList.remove("active");
+    adminEmployees.classList.add("hidden"); adminSchedules.classList.remove("hidden"); adminMonth.classList.add("hidden");
+    await loadSchedulesPane(); // refresca al entrar
+  };
+  tabMon.onclick = async ()=>{
+    tabMon.classList.add("active"); tabEmp.classList.remove("active"); tabSch.classList.remove("active");
+    adminEmployees.classList.add("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.remove("hidden");
+    await listEmployeesMonth(); // refresca al entrar
+  };
 }
 
 // login/register widgets
@@ -79,7 +91,7 @@ const logoutBtn=$("logout-btn"); if(logoutBtn) logoutBtn.onclick = ()=>auth.sign
 // Switch Admin/Empleado (visual)
 if(segEmp&&segAdm){
   segEmp.onclick = ()=>{ segEmp.classList.add("active"); segAdm.classList.remove("active"); empView.classList.remove("hidden"); admView.classList.add("hidden"); };
-  segAdm.onclick = ()=>{ segAdm.classList.add("active"); segEmp.classList.remove("active"); empView.classList.add("hidden"); admView.classList.remove("hidden"); };
+  segAdm.onclick = async ()=>{ segAdm.classList.add("active"); segEmp.classList.remove("active"); empView.classList.add("hidden"); admView.classList.remove("hidden"); await loadAdminEmployees(); await loadSchedulesPane(); await listEmployeesMonth(); };
 }
 
 // ============ Roles ============
@@ -92,9 +104,6 @@ async function resolveRole(user){
   }catch(_){}
   return "employee";
 }
-
-// ================= Empleado (placeholder) ===============
-// (Luego implementamos la tabla detallada)
 
 // ================= Admin: Empleados =====================
 async function fetchAllEmployees(){
@@ -140,7 +149,9 @@ if(saveEmpBtn) saveEmpBtn.onclick = async ()=>{
       else { await q.docs[0].ref.set({ email, nombre:name, username }, { merge:true }); }
     }
     setMsg(msg, "Empleado guardado", true);
-    loadAdminEmployees();
+    // 🔁 Refrescar ambas listas para ver el cambio en todas las pestañas
+    await loadAdminEmployees();
+    await loadSchedulesPane();
   }catch(e){ setMsg(msg, e.message); }
 };
 const resetEmpBtn=$("adm-reset");
@@ -171,6 +182,7 @@ async function loadSchedulesPane(){
   if(msg) msg.textContent="";
   renderEmployeeList("sched-users", list, (v)=>selectEmployeeForSchedule(v));
 }
+const refreshSchedBtn = $("sched-refresh"); if(refreshSchedBtn) refreshSchedBtn.onclick = ()=> loadSchedulesPane();
 async function loadEmployeeConfigByUID(uid){
   const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
   if(q.empty) return null;
@@ -279,6 +291,7 @@ auth.onAuthStateChanged(async (user)=>{
 
   const role = await resolveRole(user);
   setChip("role-chip", role.toUpperCase());
+  setChip("month-chip", monthKey());
 
   if(segEmp&&segAdm){
     if(role === "admin"){
