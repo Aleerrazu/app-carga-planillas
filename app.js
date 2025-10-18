@@ -222,8 +222,12 @@
             if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
           }
           var cmInput=$('cm-'+ds); if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
-          var saveEx=$('saveEx-'+ds), rmEx=$('rmEx-'+ds);
-          if(saveEx) saveEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=true; st.ok=true; st.ab=false; st.extraHours=(($('ex-'+ds)&&$('ex-'+ds).value)||'').trim(); setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          var rmEx=$('rmEx-'+ds);
+          // Auto-guardar extras al completar horas o comentario
+          var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
+          function autosaveExtra(){ var st=rowState(ds); var val=(exInput&&exInput.value||'').trim(); if(val){ st.ex=true; st.ok=true; st.ab=false; st.extraHours=val; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); } }
+          if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
+          if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
           if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); var sub=$('sub-'+ds); if(sub) sub.classList.add('hidden'); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
         })(ds,info);
       }

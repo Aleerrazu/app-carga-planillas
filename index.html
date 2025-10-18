@@ -27,7 +27,7 @@
     .chip{background:#334155;color:#e5e7eb;padding:4px 8px;border-radius:999px;font-size:12px}
     .hidden{display:none !important} .msg{margin:10px 0;font-size:14px}
     input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
-    table{width:100%;border-collapse:collapse}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}
     th,td{padding:10px;border-bottom:1px solid #1f2937;vertical-align:middle}
     th{color:#93c5fd;text-align:left;background:#0b1223}
     .icon{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;font-weight:900;cursor:pointer}
@@ -104,6 +104,13 @@
           <div class="pad row sp"><b>Planilla de Horarios</b><div class="muted">Día · Horario habitual · Horas trabajadas · Acciones · Comentario</div></div>
           <div class="pad" style="padding-top:0">
             <table>
+              <colgroup>
+                <col style="width:22%">
+                <col style="width:22%">
+                <col style="width:18%">
+                <col style="width:20%">
+                <col style="width:18%">
+              </colgroup>
               <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
             <tbody id="rows"></tbody>
             </table>
@@ -136,7 +143,7 @@
 
   <!-- App con cache-buster Fuerte -->
   <script>var __BUST="20251018171553-"+Math.random().toString(36).slice(2);</script>
-  <script src="app.js?v=20251018171553"></script>
+  <script src="app.js?v=20251018172459"></script>
 
   <!-- Fallback doLogin si app.js no lo definió -->
   <script>
