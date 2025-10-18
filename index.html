@@ -29,16 +29,22 @@
     .chip{background:var(--chip);padding:4px 8px;border-radius:999px;font-size:12px}
     .hidden{display:none !important}
     .msg{margin:10px 0;font-size:14px}
-    input{background:#0b1223;border:1px solid #1f2937;color:var(--text);padding:10px 12px;border-radius:10px;width:100%}
+    input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:var(--text);padding:10px 12px;border-radius:10px;width:100%}
+    textarea{min-height:38px}
     label{font-size:12px;color:var(--textmuted);display:block;margin:8px 2px}
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid #1f2937;vertical-align:middle}
     th{color:#93c5fd;text-align:left;background:#0b1223}
-    .icon{width:36px;height:36px;border-radius:999px;border:none;color:white;font-weight:900;cursor:pointer}
-    .icon.good{background:var(--good)} .icon.bad{background:var(--bad)} .icon.blue{background:var(--blue)}
+    .icon{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;font-weight:900;cursor:pointer}
+    .icon.active.good{background:var(--good);border-color:var(--good);color:white}
+    .icon.active.bad{background:var(--bad);border-color:var(--bad);color:white}
+    .icon.active.blue{background:var(--blue);border-color:var(--blue);color:white}
     .icon-row{display:flex;gap:8px;align-items:center}
     .subrow{background:#0b1223}
     .tag{font-size:12px;padding:4px 8px;border-radius:999px;background:#0b1223;border:1px solid #1f2937}
+    .segmented{background:#0b1223;border:1px solid #1f2937;border-radius:12px;padding:4px;display:inline-flex;gap:4px}
+    .segmented button{background:transparent;color:var(--textmuted);padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+    .segmented button.active{background:var(--accent);color:white}
   </style>
 </head>
 <body>
@@ -50,6 +56,13 @@
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
       <button class="btn small" id="logout-btn">Salir</button>
+    </div>
+
+    <div id="view-switch" class="row hidden" style="margin-bottom:8px;justify-content:flex-end">
+      <div class="segmented">
+        <button id="seg-employee" class="active">Empleado</button>
+        <button id="seg-admin">Admin</button>
+      </div>
     </div>
 
     <div id="auth-card" class="card pad">
@@ -67,37 +80,46 @@
     </div>
 
     <div id="app-card" class="card pad hidden">
-      <div class="row sp">
-        <div class="row">
-          <div><label>Mes</label><input type="month" id="emp-month"></div>
-          <div class="chip">Última actualización: <span id="last-update">—</span></div>
-          <div class="chip">Estado: <span id="lock-state">—</span></div>
+      <div id="employee-view">
+        <div class="row sp">
+          <div class="row">
+            <div><label>Mes</label><input type="month" id="emp-month"></div>
+            <div class="chip">Última actualización: <span id="last-update">—</span></div>
+            <div class="chip">Estado: <span id="lock-state">—</span></div>
+          </div>
+          <div class="row">
+            <button class="btn good" id="submit-month">Enviar planilla</button>
+          </div>
         </div>
-        <div class="row">
-          <button class="btn good" id="submit-month">Enviar planilla</button>
+
+        <div class="card" style="margin-top:12px">
+          <div class="pad row sp"><b>Planilla de Horarios</b><div class="muted">Día · Horario habitual · Horas trabajadas · Acciones · Comentario</div></div>
+          <div class="pad" style="padding-top:0">
+            <table>
+              <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
         </div>
+
+        <div class="card pad" style="margin-top:12px">
+          <b>Horas extra en días no habituales</b>
+          <div class="grid grid-3" style="margin-top:8px">
+            <div><label>Fecha</label><input type="date" id="nh-date"></div>
+            <div class="row" style="align-items:end">
+              <div style="width:100%"><label>Desde (0–24h)</label><input id="nh-from" type="number" min="0" max="24" step="1" placeholder="9"></div>
+              <div style="width:100%"><label>Hasta (0–24h)</label><input id="nh-to" type="number" min="0" max="24" step="1" placeholder="13"></div>
+            </div>
+            <div><label>Comentario</label><input id="nh-notes" placeholder="Guardia / reemplazo"></div>
+          </div>
+          <div class="row" style="margin-top:8px"><button class="btn blue" id="nh-save">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
+        </div>
+        <div class="msg" id="emp-msg"></div>
       </div>
 
-      <div class="card" style="margin-top:12px">
-        <div class="pad row sp"><b>Planilla de Horarios</b><div class="muted">Día · Horario habitual · Horas trabajadas · Acciones</div></div>
-        <div class="pad" style="padding-top:0">
-          <table>
-            <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th></tr></thead>
-            <tbody id="rows"></tbody>
-          </table>
-        </div>
+      <div id="admin-view" class="hidden">
+        <div class="card pad"><b>Panel de Administración</b><div class="muted">Seguimos con retoques en otro paso.</div></div>
       </div>
-
-      <div class="card pad" style="margin-top:12px">
-        <b>Horas extra en días no habituales</b>
-        <div class="grid grid-3" style="margin-top:8px">
-          <div><label>Fecha</label><input type="date" id="nh-date"></div>
-          <div><label>Horario (HH:MM-HH:MM)</label><input id="nh-hours" placeholder="09:00-13:00"></div>
-          <div><label>Comentario</label><input id="nh-notes" placeholder="Guardia / reemplazo"></div>
-        </div>
-        <div class="row" style="margin-top:8px"><button class="btn blue" id="nh-save">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
-      </div>
-      <div class="msg" id="emp-msg"></div>
     </div>
   </div>
 
