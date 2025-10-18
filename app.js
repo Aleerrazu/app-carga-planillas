@@ -1,4 +1,4 @@
-// ===================== Firebase =====================
+// ===== Firebase =====
 const firebaseConfig = {
   apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
   authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
@@ -11,298 +11,235 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// ============ Utilidades UI ============
+// ===== Helpers =====
 const $ = (id)=>document.getElementById(id);
-function setMsg(el, text, good=false){ el.textContent=text; el.style.color = good?'#86efac':'#fecaca';}
-function fmtDate(d){ return d.toISOString().split('T')[0]; }
-function monthKey(date=new Date()){ return date.toISOString().slice(0,7); } // YYYY-MM
-function setChip(id, val){ const el=$(id); if(el) el.textContent = val; }
-function pad2(n){ return String(n).padStart(2,'0'); }
+const fmt = (d)=>d.toISOString().split('T')[0];
+const ym = (d)=>d.toISOString().slice(0,7);
+const wkey = (d)=>['sun','mon','tue','wed','thu','fri','sat'][d.getDay()];
+const wname = (d)=>d.toLocaleDateString('es-AR',{weekday:'long'});
 function parseHM(s){
   if(!s) return null;
   const m = s.match(/(\d{1,2}):?(\d{2})?\s*(?:-|a|A)\s*(\d{1,2}):?(\d{2})?/);
   if(!m) return null;
-  const h1 = parseInt(m[1],10), m1 = parseInt(m[2]||"0",10);
-  const h2 = parseInt(m[3],10), m2 = parseInt(m[4]||"0",10);
-  const start = h1*60+m1, end = h2*60+m2;
-  const diff = (end>=start? end-start : (24*60 - start + end));
-  return { start, end, hours: (diff/60).toFixed(2) };
+  const h1=+m[1], m1=+(m[2]||0), h2=+m[3], m2=+(m[4]||0);
+  const start=h1*60+m1, end=h2*60+m2;
+  const diff = end>=start? end-start : (24*60-start+end);
+  return {hours:(diff/60).toFixed(2)};
 }
-function weekdayKey(date){ return ['sun','mon','tue','wed','thu','fri','sat'][date.getDay()]; }
-function weekdayNameEsLong(date){ return date.toLocaleDateString('es-AR', { weekday:'long' }); }
+function setMsg(el, msg, good=false){ if(!el) return; el.textContent=msg; el.style.color = good?'#86efac':'#fecaca'; }
 
-// ============ Elementos ============
-const authCard = $("auth-card");
-const appCard  = $("app-card");
-const segEmp   = $("seg-employee");
-const segAdm   = $("seg-admin");
-const empView  = $("employee-view");
-const admView  = $("admin-view");
-
-// Admin tabs
-const tabEmp = $("tab-admin-employees");
-const tabSch = $("tab-admin-schedules");
-const tabMon = $("tab-admin-month");
-const adminEmployees = $("admin-employees");
-const adminSchedules = $("admin-schedules");
-const adminMonth     = $("admin-month");
-if(tabEmp&&tabSch&&tabMon){
-  tabEmp.onclick = async ()=>{
-    tabEmp.classList.add("active"); tabSch.classList.remove("active"); tabMon.classList.remove("active");
-    adminEmployees.classList.remove("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.add("hidden");
-    await loadAdminEmployees(); // refresca al entrar
-  };
-  tabSch.onclick = async ()=>{
-    tabSch.classList.add("active"); tabEmp.classList.remove("active"); tabMon.classList.remove("active");
-    adminEmployees.classList.add("hidden"); adminSchedules.classList.remove("hidden"); adminMonth.classList.add("hidden");
-    await loadSchedulesPane(); // refresca al entrar
-  };
-  tabMon.onclick = async ()=>{
-    tabMon.classList.add("active"); tabEmp.classList.remove("active"); tabSch.classList.remove("active");
-    adminEmployees.classList.add("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.remove("hidden");
-    await listEmployeesMonth(); // refresca al entrar
-  };
-}
-
-// login/register widgets
-const tabLogin=$("tab-login"), tabRegister=$("tab-register");
-if(tabLogin&&tabRegister){
-  tabLogin.onclick = ()=>{ tabLogin.classList.add('active'); tabRegister.classList.remove('active'); };
-  tabRegister.onclick = ()=>{ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); };
-}
-const loginBtn=$("login-btn"), registerBtn=$("register-btn"), resetBtn=$("reset-btn");
-if(loginBtn) loginBtn.onclick = async ()=>{
-  try{ await auth.signInWithEmailAndPassword($("email").value, $("password").value);
-    setMsg($("auth-msg"), "Ingreso correcto", true);
-  }catch(e){ setMsg($("auth-msg"), e.message); }
-};
-if(registerBtn) registerBtn.onclick = async ()=>{
-  try{ await auth.createUserWithEmailAndPassword($("email").value, $("password").value);
-    setMsg($("auth-msg"), "Cuenta creada. Ya podés ingresar.", true);
-  }catch(e){ setMsg($("auth-msg"), e.message); }
-};
-if(resetBtn) resetBtn.onclick = async ()=>{
-  try{ await auth.sendPasswordResetEmail($("email").value);
-    setMsg($("auth-msg"), "Te enviamos un mail para blanquear.", true);
-  }catch(e){ setMsg($("auth-msg"), e.message); }
-};
-const logoutBtn=$("logout-btn"); if(logoutBtn) logoutBtn.onclick = ()=>auth.signOut();
-
-// Switch Admin/Empleado (visual)
-if(segEmp&&segAdm){
-  segEmp.onclick = ()=>{ segEmp.classList.add("active"); segAdm.classList.remove("active"); empView.classList.remove("hidden"); admView.classList.add("hidden"); };
-  segAdm.onclick = async ()=>{ segAdm.classList.add("active"); segEmp.classList.remove("active"); empView.classList.add("hidden"); admView.classList.remove("hidden"); await loadAdminEmployees(); await loadSchedulesPane(); await listEmployeesMonth(); };
-}
-
-// ============ Roles ============
-const ADMIN_EMAILS = []; // ej: ["tu@empresa.com"]
-async function resolveRole(user){
-  if(ADMIN_EMAILS.includes(user.email)) return "admin";
-  try{
-    const r = await db.collection("roles").doc(user.uid).get();
-    if(r.exists && r.data().role === "admin") return "admin";
-  }catch(_){}
-  return "employee";
-}
-
-// ================= Admin: Empleados =====================
-async function fetchAllEmployees(){
-  const snap = await db.collection("employee_config").get();
-  return snap.docs.map(d=>({ id:d.id, ...d.data() }));
-}
-function renderEmployeeList(containerId, list, handler){
-  const el = $(containerId); if(!el) return; el.innerHTML = "";
-  list.forEach(v=>{
-    const wrap = document.createElement("div");
-    wrap.className = "item";
-    wrap.innerHTML = `<div><b>${v.nombre||"—"}</b><div class="muted tiny">${v.email||"—"} · <span class="chip">${v.userId||v.id}</span></div></div>
-                      <div class="row"><button class="btn small gray">Editar</button></div>`;
-    wrap.querySelector("button").onclick = ()=> handler(v);
-    el.appendChild(wrap);
-  });
-}
-async function loadAdminEmployees(){
-  const msg = $("adm-users-msg"); if(msg) msg.textContent="Cargando...";
-  const list = await fetchAllEmployees();
-  if(msg) msg.textContent="";
-  renderEmployeeList("adm-users-list", list, (v)=>{
-    $("adm-name").value = v.nombre||""; $("adm-email").value = v.email||""; $("adm-username").value = v.username||""; $("adm-uid").value = v.userId||v.id;
-  });
-}
-const saveEmpBtn=$("adm-save-employee");
-if(saveEmpBtn) saveEmpBtn.onclick = async ()=>{
-  const uid  = $("adm-uid").value.trim();
-  const email= $("adm-email").value.trim();
-  const name = $("adm-name").value.trim();
-  const username = $("adm-username").value.trim();
-  const msg = $("adm-msg");
-
-  if(!uid && !email){ setMsg(msg, "UID o Email requerido"); return; }
-  try{
-    if(uid){
-      const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
-      if(q.empty){ await db.collection("employee_config").add({ userId:uid, email, nombre:name, username }); }
-      else { await q.docs[0].ref.set({ userId:uid, email, nombre:name, username }, { merge:true }); }
-    }else{
-      const q = await db.collection("employee_config").where("email","==",email).limit(1).get();
-      if(q.empty){ setMsg(msg, "Si no hay UID, primero creá el usuario y completá su UID.", false); return; }
-      else { await q.docs[0].ref.set({ email, nombre:name, username }, { merge:true }); }
-    }
-    setMsg(msg, "Empleado guardado", true);
-    // 🔁 Refrescar ambas listas para ver el cambio en todas las pestañas
-    await loadAdminEmployees();
-    await loadSchedulesPane();
-  }catch(e){ setMsg(msg, e.message); }
-};
-const resetEmpBtn=$("adm-reset");
-if(resetEmpBtn) resetEmpBtn.onclick = async ()=>{
-  try{ await auth.sendPasswordResetEmail($("adm-email").value.trim()); setMsg($("adm-msg"), "Email de blanqueo enviado", true); }
-  catch(e){ setMsg($("adm-msg"), e.message); }
-};
-
-// ================= Admin: Horarios ======================
-function readDayInputs(prefix){
-  return {
-    start: ($(`${prefix}-start`).value||"").trim(),
-    end:   ($(`${prefix}-end`).value||"").trim(),
-    off:   $(`${prefix}-off`).checked,
-    variable: $(`${prefix}-var`).checked
-  };
-}
-function fillDayInputs(prefix, obj){
-  $(`${prefix}-start`).value = obj?.start||"";
-  $(`${prefix}-end`).value   = obj?.end||"";
-  $(`${prefix}-off`).checked = !!obj?.off;
-  $(`${prefix}-var`).checked = !!obj?.variable;
-}
-let currentSchedUID = null;
-async function loadSchedulesPane(){
-  const msg = $("sched-users-msg"); if(msg) msg.textContent="Cargando...";
-  const list = await fetchAllEmployees();
-  if(msg) msg.textContent="";
-  renderEmployeeList("sched-users", list, (v)=>selectEmployeeForSchedule(v));
-}
-const refreshSchedBtn = $("sched-refresh"); if(refreshSchedBtn) refreshSchedBtn.onclick = ()=> loadSchedulesPane();
-async function loadEmployeeConfigByUID(uid){
-  const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
+async function getConfig(uid){
+  const q = await db.collection('employee_config').where('userId','==',uid).limit(1).get();
   if(q.empty) return null;
   return { id:q.docs[0].id, ...q.docs[0].data() };
 }
-async function selectEmployeeForSchedule(v){
-  currentSchedUID = v.userId||v.id;
-  $("sched-emp-name").textContent = v.nombre||v.email||currentSchedUID;
-  const cfg = await loadEmployeeConfigByUID(currentSchedUID);
-  const sbd = cfg?.scheduleByDay||{};
-  fillDayInputs("mon", sbd.mon); fillDayInputs("tue", sbd.tue); fillDayInputs("wed", sbd.wed);
-  fillDayInputs("thu", sbd.thu); fillDayInputs("fri", sbd.fri); fillDayInputs("sat", sbd.sat); fillDayInputs("sun", sbd.sun);
-  $("adm-sched").value = cfg?.horarioHabitual||"";
+async function getLock(uid, key){
+  const d = await db.collection('locks').doc(`${uid}_${key}`).get();
+  return d.exists ? d.data() : {locked:false,lastSubmitted:null};
 }
-const saveSchedBtn=$("save-schedule");
-if(saveSchedBtn) saveSchedBtn.onclick = async ()=>{
-  const msg = $("sched-msg");
-  if(!currentSchedUID){ setMsg(msg, "Elegí un empleado"); return; }
-  const scheduleByDay = {
-    mon: readDayInputs("mon"), tue: readDayInputs("tue"), wed: readDayInputs("wed"),
-    thu: readDayInputs("thu"), fri: readDayInputs("fri"), sat: readDayInputs("sat"), sun: readDayInputs("sun")
-  };
-  try{
-    const q = await db.collection("employee_config").where("userId","==",currentSchedUID).limit(1).get();
-    if(q.empty){ setMsg(msg, "Empleado sin config base (usa pestaña Empleados)", false); return; }
-    await q.docs[0].ref.set({ scheduleByDay, horarioHabitual: $("adm-sched").value.trim() }, { merge:true });
-    setMsg(msg, "Horario guardado", true);
-  }catch(e){ setMsg(msg, e.message); }
-};
-
-// ================= Admin: Estado mensual ================
-async function loadLock(uid, ym){
-  const doc = await db.collection("locks").doc(`${uid}_${ym}`).get();
-  return doc.exists ? doc.data() : { locked:false, lastSubmitted:null };
+async function setLock(uid, key, locked){
+  await db.collection('locks').doc(`${uid}_${key}`).set({locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null},{merge:true});
 }
-async function setLock(uid, ym, locked){
-  await db.collection("locks").doc(`${uid}_${ym}`).set({ locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null }, { merge:true });
+async function monthReports(uid, key){
+  const snap = await db.collection('timesheets').where('userId','==',uid).where('mesAnio','==',key).get();
+  const map = {}; snap.forEach(x=> map[x.data().fecha]=x.data()); return map;
 }
-async function employeeMonthStatus(uid, ym){
-  const lk = await loadLock(uid, ym);
-  return lk.locked ? `Bloqueado ${lk.lastSubmitted? "("+ new Date(lk.lastSubmitted.toDate()).toLocaleDateString()+")":""}` : "Editable";
+
+// ===== UI Rendering =====
+function habitualForDay(sbd, d){
+  const obj = sbd[wkey(d)]||{};
+  if(obj.off) return {text:null, variable:false, skip:true};
+  if(obj.variable) return {text:"", variable:true, skip:false};
+  if(!obj.start || !obj.end) return {text:"", variable:false, skip:false};
+  return {text:`${obj.start}-${obj.end}`, variable:false, skip:false};
 }
-async function listEmployeesMonth(){
-  const ym = ($("adm-month").value || monthKey()); $("adm-month").value = ym;
-  const tbody = $("adm-list"), msg = $("adm-list-msg");
-  tbody.innerHTML = ""; if(msg) msg.textContent="Cargando...";
-  const snap = await db.collection("employee_config").get();
-  if(msg) msg.textContent="";
-  if(snap.empty){ tbody.innerHTML = `<tr><td colspan="5">Sin empleados</td></tr>`; return; }
-  for (const d of snap.docs){
-    const v = d.data(); const uid = v.userId||d.id;
-    const status = await employeeMonthStatus(uid, ym);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${v.nombre||"—"}</td><td>${v.email||"—"}</td><td>${uid}</td>
-                    <td>${status}</td>
-                    <td class="row">
-                      <button class="btn small" onclick="inspectReports('${uid}','${v.nombre||""}','${ym}')">Ver</button>
-                      <button class="btn small good" onclick="quickLock('${uid}','${ym}',true)">Bloquear</button>
-                      <button class="btn small bad"  onclick="quickLock('${uid}','${ym}',false)">Permitir cambios</button>
-                    </td>`;
-    tbody.appendChild(tr);
-  }
+function buildRow(dateStr, dow, habitual, variable, locked, existing){
+  // returns TR element (+ optional subrow placeholder)
+  const tr = document.createElement('tr');
+  tr.id = `row-${dateStr}`;
+  const dayCell = `<td><b>${dow} ${dateStr.slice(8,10)}/${dateStr.slice(5,7)}</b></td>`;
+  const habitualCell = `<td>${variable ? `<input id="var-${dateStr}" placeholder="HH:MM-HH:MM" ${locked?'disabled':''}>` : (habitual||'—')}</td>`;
+  const hoursCell = `<td id="hrs-${dateStr}" class="muted">—</td>`;
+  const act =
+    existing ? `<td><span class="tag">${existing.tipoReporte}</span></td>` :
+    `<td class="icon-row">
+        <button class="icon good" ${locked?'disabled':''} title="Habitual" onclick="markHabitual('${dateStr}')">✓</button>
+        <button class="icon bad" ${locked?'disabled':''} title="Ausencia" onclick="markAbsence('${dateStr}')">✕</button>
+        <button class="icon blue" ${locked?'disabled':''} title="Extra" onclick="toggleExtra('${dateStr}')">＋</button>
+     </td>`;
+  tr.innerHTML = dayCell + habitualCell + hoursCell + act;
+  const sub = document.createElement('tr');
+  sub.id = `sub-${dateStr}`;
+  sub.className = 'subrow hidden';
+  sub.innerHTML = `<td></td><td colspan="2"><div class="row"><label>Extra</label><input id="ex-${dateStr}" placeholder="HH:MM-HH:MM" ${locked?'disabled':''}></div></td>
+                   <td><button class="btn small blue" ${locked?'disabled':''} onclick="saveMixed('${dateStr}')">Guardar</button></td>`;
+  return [tr, sub];
 }
-window.inspectReports = async (uid, name, ym)=>{
-  ym = ym || monthKey();
-  const start = ym+"-01", end = ym+"-31";
-  const snap = await db.collection("timesheets").where("userId","==",uid).where("fecha",">=",start).where("fecha","<=",end).get();
-  console.group(`Reportes de ${name||uid} (${ym})`);
-  snap.forEach(d=>{
-    const v = d.data(); console.log(`[${v.fecha}] ${v.tipoReporte} | ${v.horarioReportado||""} | ${v.comentarios||""}`);
-  });
-  console.groupEnd();
-  const msg = $("adm-list-msg"); if(msg) setMsg(msg, `Listados en consola ${name||uid}`, true);
-};
-window.quickLock = async (uid, ym, locked)=>{ await setLock(uid, ym, locked); await listEmployeesMonth(); };
 
-const admRefresh=$("adm-refresh"); if(admRefresh) admRefresh.onclick = ()=> listEmployeesMonth();
-const exportBtn=$("export-csv"); if(exportBtn) exportBtn.onclick = async ()=>{
-  const snap = await db.collection("timesheets").get();
-  if(snap.empty){ setMsg($("adm-list-msg"), "Sin datos"); return; }
-  let csv = "Nombre;Email;Fecha;Mes_Anio;Tipo;Detalle;Comentarios;UID\n";
-  snap.forEach(d=>{
-    const v = d.data();
-    const row = [v.nombre||"",v.email||"",v.fecha||"",v.mesAnio||"",v.tipoReporte||"", (v.horarioReportado||"").replace(/[;,\n]/g," "), (v.comentarios||"").replace(/[;,\n]/g," "), v.userId||""].join(";");
-    csv += row+"\n";
-  });
-  const a = document.createElement("a");
-  a.href = "data:text/csv;charset=utf-8," + encodeURI(csv);
-  a.download = `reportes_${new Date().toISOString().slice(0,10)}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-};
+async function paintTable(user){
+  const key = $('emp-month').value || ym(new Date());
+  $('emp-month').value = key;
+  const cfg = await getConfig(user.uid);
+  const lock = await getLock(user.uid, key);
+  $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
+  $('last-update').textContent = lock.lastSubmitted? new Date(lock.lastSubmitted.toDate()).toLocaleString() : '—';
+  $('user-email').textContent = user.email;
 
-// ================== Auth State ==========================
-auth.onAuthStateChanged(async (user)=>{
-  setChip("env-chip", "Conectado");
-  if(!user){
-    authCard.classList.remove("hidden");
-    appCard.classList.add("hidden");
-    setChip("user-email","—");
-    setChip("role-chip","—");
-    return;
-  }
-  setChip("user-email", user.email);
-  authCard.classList.add("hidden");
-  appCard.classList.remove("hidden");
+  const name = cfg?.nombre || user.email;
+  $('role-chip').textContent = `Empleado · ${name}`;
 
-  const role = await resolveRole(user);
-  setChip("role-chip", role.toUpperCase());
-  setChip("month-chip", monthKey());
+  const sbd = cfg?.scheduleByDay || {};
+  const rows = $('rows'); rows.innerHTML = "";
 
-  if(segEmp&&segAdm){
-    if(role === "admin"){
-      segAdm.classList.add("active"); segEmp.classList.remove("active");
-      empView.classList.add("hidden"); admView.classList.remove("hidden");
-      await loadAdminEmployees();
-      await loadSchedulesPane();
-      await listEmployeesMonth();
-    }else{
-      segEmp.classList.add("active"); segAdm.classList.remove("active");
-      empView.classList.remove("hidden"); admView.classList.add("hidden");
+  // existing month data
+  const existing = await monthReports(user.uid, key);
+
+  const [y, m] = key.split('-').map(Number);
+  const count = new Date(y, m, 0).getDate(); // y, month index 1-based? JS months 0-11 so using (y, m, 0) gives last day prev month -> needs m as next month index; here m is 1..12; fine.
+  for(let d=1; d<=count; d++){
+    const date = new Date(y, m-1, d);
+    const ds = fmt(date);
+    const info = habitualForDay(sbd, date);
+    if(info.skip) continue; // no trabaja → ocultar
+    const [tr, sub] = buildRow(ds, wname(date).charAt(0).toUpperCase()+wname(date).slice(1), info.text, info.variable, lock.locked, existing[ds]);
+    rows.appendChild(tr); rows.appendChild(sub);
+
+    // fill hours if exists
+    const rec = existing[ds];
+    if(rec){
+      const hrs = parseHM(rec.horarioReportado||"");
+      $('hrs-'+ds).textContent = hrs? `${hrs.hours} h` : (rec.tipoReporte==='FALTA' ? '0 h' : '—');
     }
   }
+
+  // disable submit if locked
+  $('submit-month').disabled = lock.locked;
+}
+
+// ===== Actions =====
+window.toggleExtra = (ds)=>{
+  const el = $('sub-'+ds);
+  if(!el) return;
+  el.classList.toggle('hidden');
+};
+
+window.markHabitual = async (ds)=>{
+  const user = auth.currentUser; if(!user) return;
+  const key = $('emp-month').value;
+  const cfg = await getConfig(user.uid);
+  const date = new Date(ds);
+  const info = habitualForDay(cfg?.scheduleByDay||{}, date);
+  let habitual = info.text;
+  if(info.variable){
+    const v = $('var-'+ds).value.trim();
+    if(!v){ setMsg($('emp-msg'), 'Ingresá horario habitual para ese día', false); return; }
+    habitual = v;
+  }
+  // single record
+  await db.collection('timesheets').doc(`${user.uid}_${ds}`).set({
+    userId:user.uid, email:user.email, nombre: cfg?.nombre||'',
+    fecha: ds, mesAnio: key, tipoReporte: 'HABITUAL', horarioReportado: habitual, comentarios: 'Horario habitual',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  const hrs = parseHM(habitual); $('hrs-'+ds).textContent = hrs? `${hrs.hours} h` : '—';
+  // replace action cell by tag
+  const cell = $('row-'+ds).children[3]; if(cell) cell.innerHTML = `<span class="tag">HABITUAL</span>`;
+  setMsg($('emp-msg'), `Guardado ${ds}`, true);
+};
+
+window.markAbsence = async (ds)=>{
+  const user = auth.currentUser; if(!user) return;
+  const key = $('emp-month').value;
+  const cfg = await getConfig(user.uid);
+  await db.collection('timesheets').doc(`${user.uid}_${ds}`).set({
+    userId:user.uid, email:user.email, nombre: cfg?.nombre||'',
+    fecha: ds, mesAnio: key, tipoReporte: 'FALTA', horarioReportado: '', comentarios: 'Ausencia',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  $('hrs-'+ds).textContent = '0 h';
+  const cell = $('row-'+ds).children[3]; if(cell) cell.innerHTML = `<span class="tag">FALTA</span>`;
+  setMsg($('emp-msg'), `Falta marcada ${ds}`, true);
+};
+
+window.saveMixed = async (ds)=>{
+  const user = auth.currentUser; if(!user) return;
+  const key = $('emp-month').value;
+  const cfg = await getConfig(user.uid);
+  const date = new Date(ds);
+  const info = habitualForDay(cfg?.scheduleByDay||{}, date);
+  let habitual = info.text;
+  if(info.variable){
+    const v = $('var-'+ds).value.trim();
+    if(!v){ setMsg($('emp-msg'), 'Ingresá horario habitual para ese día', false); return; }
+    habitual = v;
+  }
+  const extra = $('ex-'+ds).value.trim();
+  if(!extra){ setMsg($('emp-msg'), 'Ingresá horario de extra', false); return; }
+  await db.collection('timesheets').doc(`${user.uid}_${ds}`).set({
+    userId:user.uid, email:user.email, nombre: cfg?.nombre||'',
+    fecha: ds, mesAnio: key, tipoReporte: 'MIXTO', horarioReportado: `${habitual} + ${extra}`, comentarios: 'Habitual + Extra',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  const h1 = parseHM(habitual)?.hours || 0;
+  const h2 = parseHM(extra)?.hours || 0;
+  $('hrs-'+ds).textContent = `${(+h1 + +h2).toFixed(2)} h`;
+  $('sub-'+ds).classList.add('hidden');
+  const cell = $('row-'+ds).children[3]; if(cell) cell.innerHTML = `<span class="tag">MIXTO</span>`;
+  setMsg($('emp-msg'), `Guardado habitual + extra ${ds}`, true);
+};
+
+$('nh-save').onclick = async ()=>{
+  const user = auth.currentUser; if(!user) return;
+  const key = $('emp-month').value || ym(new Date());
+  const date = $('nh-date').value; const hrs = $('nh-hours').value.trim(); const notes = $('nh-notes').value.trim();
+  if(!date || !hrs){ setMsg($('nh-msg'), 'Fecha y horario requeridos'); return; }
+  const cfg = await getConfig(user.uid);
+  await db.collection('timesheets').doc(`${user.uid}_${date}`).set({
+    userId:user.uid, email:user.email, nombre: cfg?.nombre||'',
+    fecha: date, mesAnio: key, tipoReporte: 'EXTRA', horarioReportado: hrs, comentarios: notes||'Extra en día no habitual',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  }, {merge:true});
+  setMsg($('nh-msg'), 'Extra guardada', true);
+  // si la fecha está en la tabla, actualizamos horas
+  const h = parseHM(hrs)?.hours||0;
+  const el = $('hrs-'+date); if(el){ const prev = parseFloat((el.textContent||'0').replace(' h',''))||0; el.textContent = `${(prev + +h).toFixed(2)} h`; }
+};
+
+$('submit-month').onclick = async ()=>{
+  const user = auth.currentUser; if(!user) return;
+  const key = $('emp-month').value || ym(new Date());
+  await setLock(user.uid, key, true);
+  const lk = await getLock(user.uid, key);
+  $('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
+  $('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
+  $('submit-month').disabled = lk.locked;
+};
+
+$('emp-month').onchange = ()=>{ const u=auth.currentUser; if(u) paintTable(u); };
+
+// ===== Auth =====
+$('login-btn').onclick = async ()=>{
+  try{ await auth.signInWithEmailAndPassword($('email').value, $('password').value); $('auth-msg').textContent=''; }catch(e){ setMsg($('auth-msg'), e.message); }
+};
+$('register-btn').onclick = async ()=>{
+  try{ await auth.createUserWithEmailAndPassword($('email').value, $('password').value); setMsg($('auth-msg'), 'Cuenta creada', true);}catch(e){ setMsg($('auth-msg'), e.message); }
+};
+$('reset-btn').onclick = async ()=>{
+  try{ await auth.sendPasswordResetEmail($('email').value); setMsg($('auth-msg'), 'Email enviado', true);}catch(e){ setMsg($('auth-msg'), e.message); }
+};
+$('logout-btn').onclick = ()=>auth.signOut();
+
+auth.onAuthStateChanged(async (user)=>{
+  if(!user){
+    $('auth-card').classList.remove('hidden');
+    $('app-card').classList.add('hidden');
+    $('user-email').textContent='—'; $('role-chip').textContent='—';
+    return;
+  }
+  $('auth-card').classList.add('hidden');
+  $('app-card').classList.remove('hidden');
+  $('user-email').textContent = user.email;
+  $('role-chip').textContent = 'Empleado';
+  $('emp-month').value = ym(new Date());
+  await paintTable(user);
 });
