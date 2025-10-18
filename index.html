@@ -19,9 +19,19 @@
     .pad{padding:16px} .muted{color:var(--textmuted)}
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .sp{justify-content:space-between}
     .btn{background:var(--accent);color:white;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
-    .btn.small{padding:6px 10px;border-radius:999px} .chip{background:#334155;color:#e5e7eb;padding:4px 8px;border-radius:999px;font-size:12px}
+    .btn.small{padding:6px 10px;border-radius:999px}
+    .chip{background:#334155;color:#e5e7eb;padding:4px 8px;border-radius:999px;font-size:12px}
     .hidden{display:none !important} .msg{margin:10px 0;font-size:14px}
-    input{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
+    input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #1f2937;vertical-align:middle}
+    th{color:#93c5fd;text-align:left;background:#0b1223}
+    .icon{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;font-weight:900;cursor:pointer}
+    .icon.active.good{background:#16a34a;border-color:#16a34a;color:white}
+    .icon.active.bad{background:#dc2626;border-color:#dc2626;color:white}
+    .icon.active.blue{background:#2563eb;border-color:#2563eb;color:white}
+    .icon-row{display:flex;gap:8px;align-items:center}
+    .subrow{background:#0b1223}
   </style>
 </head>
 <body>
@@ -29,7 +39,7 @@
     <div class="brand">
       <div class="dot"></div>
       <div class="title">Control Horario · Panel</div>
-      <div class="chip" id="version-chip">v2025.10.18-1358 UTC</div>
+      <div class="chip" id="version-chip">v2025.10.18-1405 UTC</div>
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
       <button class="btn small" id="logout-btn">Salir</button>
@@ -50,11 +60,44 @@
     </div>
 
     <div id="app-card" class="card pad hidden">
-      <div class="chip">Logueado</div>
+      <div class="row sp">
+        <div class="row">
+          <div><label>Mes</label><input type="month" id="emp-month"></div>
+          <div class="chip">Última actualización: <span id="last-update">—</span></div>
+          <div class="chip">Estado: <span id="lock-state">—</span></div>
+        </div>
+        <div class="row">
+          <button class="btn" id="submit-month">Enviar planilla</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="pad row sp"><b>Planilla de Horarios</b><div class="muted">Día · Horario habitual · Horas trabajadas · Acciones · Comentario</div></div>
+        <div class="pad" style="padding-top:0">
+          <table>
+            <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card pad" style="margin-top:12px">
+        <b>Horas extra en días no habituales</b>
+        <div class="grid grid-3" style="margin-top:8px">
+          <div><label>Fecha</label><input type="date" id="nh-date"></div>
+          <div class="row" style="align-items:end">
+            <div style="width:100%"><label>Desde (0–24h)</label><input id="nh-from" type="number" min="0" max="24" step="1" placeholder="9"></div>
+            <div style="width:100%"><label>Hasta (0–24h)</label><input id="nh-to" type="number" min="0" max="24" step="1" placeholder="13"></div>
+          </div>
+          <div><label>Comentario</label><input id="nh-notes" placeholder="Guardia / reemplazo"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><button class="btn" id="nh-save">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
+      </div>
+      <div class="msg" id="emp-msg"></div>
     </div>
   </div>
 
-  <!-- Fallback: define doLogin before external JS in case éste da error -->
+  <!-- Fallback login inline -->
   <script>
     function doLogin(){
       var btn=document.getElementById('login-btn');
@@ -72,7 +115,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <!-- cache busting para evitar JS viejo -->
-  <script src="app.js?v=v2025.10.18-1358 UTC"></script>
+  <script src="app.js?v=v2025.10.18-1405 UTC"></script>
 </body>
 </html>
