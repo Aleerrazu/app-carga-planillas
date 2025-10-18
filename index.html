@@ -28,25 +28,25 @@
     .hidden{display:none !important} .msg{margin:10px 0;font-size:14px}
     input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
     table{width:100%;border-collapse:collapse;table-layout:fixed}
-    th,td{padding:10px;border-bottom:1px solid #1f2937;vertical-align:middle}
+    th,td{padding:12px 10px;border-bottom:1px solid #1f2937;vertical-align:middle}
     th{color:#93c5fd;text-align:left;background:#0b1223}
     .icon{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;font-weight:900;cursor:pointer}
     .icon.active.good{background:#16a34a;border-color:#16a34a;color:white}
     .icon.active.bad{background:#dc2626;border-color:#dc2626;color:white}
     .icon.active.blue{background:#2563eb;border-color:#2563eb;color:white}
-    .icon-row{display:flex;gap:8px;align-items:center}
+    .icon-row{display:flex;gap:8px;align-items:center;justify-content:center}
     .subrow{background:#0b1223}
     .trash{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;cursor:pointer}
     .stack{display:flex;flex-direction:column;gap:4px} .tag{display:inline-block;background:#0b1223;border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:12px}
   </style>
-  <script>window.__APP_VERSION="v2025.10.18-1746-43 UTC";</script>
+  <script>window.__APP_VERSION="v2025.10.18-1807-09 UTC";</script>
 </head>
 <body>
   <div class="wrap">
     <div class="brand">
       <div class="dot"></div>
       <div class="title">Control Horario · Panel</div>
-      <div class="chip" id="version-chip">v2025.10.18-1746-43 UTC</div>
+      <div class="chip" id="version-chip">v2025.10.18-1807-09 UTC</div>
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
       <button class="btn small" id="logout-btn" type="button">Salir</button>
@@ -100,11 +100,11 @@
           <div class="pad" style="padding-top:0">
             <table>
               <colgroup>
-                <col style="width:22%">
-                <col style="width:22%">
-                <col style="width:18%">
                 <col style="width:20%">
-                <col style="width:18%">
+                <col style="width:20%">
+                <col style="width:15%">
+                <col style="width:20%">
+                <col style="width:25%">
               </colgroup>
               <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>HS TRABAJADAS</th><th>ACCIONES</th><th>COMENTARIO</th></tr></thead>
               <tbody id="rows"></tbody>
@@ -134,22 +134,22 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <script src="app.js?v=20251018174643"></script>
+  <script src="app.js?v=20251018180709"></script>
 
   <script>
-    if (typeof window.doLogin !== 'function') {{
-      window.doLogin = function() {{
+    if (typeof window.doLogin !== 'function') {
+      window.doLogin = function() {
         const btn = document.getElementById('login-btn');
         const msg = document.getElementById('auth-msg');
         const email = (document.getElementById('email')?.value || '').trim();
         const pass  = (document.getElementById('password')?.value || '');
         btn.disabled = true; btn.textContent = 'Ingresando...';
         firebase.auth().signInWithEmailAndPassword(email, pass)
-          .then(() => {{ msg.textContent = 'Ingreso correcto'; msg.style.color = '#86efac'; }})
-          .catch(e => {{ msg.textContent = e?.message || 'No se pudo ingresar'; msg.style.color = '#fecaca'; }})
-          .finally(() => {{ btn.disabled = false; btn.textContent = 'Entrar'; }});
-      }}
-    }}
+          .then(() => { msg.textContent = 'Ingreso correcto'; msg.style.color = '#86efac'; })
+          .catch(e => { msg.textContent = e?.message || 'No se pudo ingresar'; msg.style.color = '#fecaca'; })
+          .finally(() => { btn.disabled = false; btn.textContent = 'Entrar'; });
+      }
+    }
   </script>
 </body>
 </html>

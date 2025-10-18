@@ -1,8 +1,6 @@
 (function(){
-  // ===== Versión embebida (para ver rápido en el chip) =====
-  try { if (document.getElementById('version-chip')) { document.getElementById('version-chip').textContent = window.__APP_VERSION || 'v-dev'; } } catch(e){}
+  try { document.getElementById('version-chip').textContent = window.__APP_VERSION || document.getElementById('version-chip').textContent; } catch(e){}
 
-  // ================= Firebase =================
   var firebaseConfig = {
     apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
     authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
@@ -13,7 +11,6 @@
   };
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
-  // ================= Utils =================
   function $(id){ return document.getElementById(id); }
   function fmt(d){ return d.toISOString().split('T')[0]; }
   function ym(d){ return d.toISOString().slice(0,7); }
@@ -31,7 +28,6 @@
   }
   function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
-  // ================= Data helpers =================
   function getRole(uid){
     return firebase.firestore().collection('roles').doc(uid).get().then(function(r){
       return (r.exists && r.data() && r.data().role==='admin') ? 'admin' : 'employee';
@@ -61,7 +57,6 @@
       .then(function(d){ return d.exists ? d.data() : null; });
   }
 
-  // ================= Mes (selects) =================
   function buildMonthSelectors(){
     var now=new Date(), y=now.getFullYear();
     var selM=$('sel-month'), selY=$('sel-year');
@@ -74,7 +69,6 @@
   }
   function currentYM(){ return ymFromParts($('sel-year').value, $('sel-month').value); }
 
-  // ================= Filas/estado =================
   function habitualForDay(sbd, d){
     var o = (sbd && sbd[wkey(d)]) || {};
     if(o.off) return {text:null, variable:false, skip:true};
@@ -85,16 +79,13 @@
   function rowState(ds){ var r=$('row-'+ds); return r? JSON.parse(r.getAttribute('data-state')||'{}') : {}; }
   function setRowState(ds, st){ var r=$('row-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
 
-  
   function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
     var tr=document.createElement('tr'); tr.id='row-'+ds;
 
-    // Columna 1: Día
     var td1=document.createElement('td'); 
     var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
     td1.appendChild(b);
 
-    // Columna 2: Horario habitual (texto o input si variable)
     var td2=document.createElement('td');
     if(variable){ 
       var inp=document.createElement('input'); 
@@ -106,13 +97,11 @@
       td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); 
     }
 
-    // Columna 3: HS TRABAJADAS (solo chips, nunca inputs)
     var td3=document.createElement('td'); 
     td3.id='hrs-'+ds; 
     td3.className='stack muted'; 
     td3.innerHTML='<span class="tag">—</span>';
 
-    // Columna 4: ACCIONES (✓ ✕ ＋ siempre acá)
     var td4=document.createElement('td'); 
     td4.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
@@ -129,14 +118,12 @@
       });
     }
 
-    // Columna 5: Comentario
     var td5=document.createElement('td'); 
     var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
     td5.appendChild(cm);
 
     tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
 
-    // Subfila "Extra" (5 columnas) sin botón Guardar (auto-guardado)
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML= ''
       + '<td>Extra</td>'
@@ -146,8 +133,7 @@
       + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
 
     if(locked){ 
-      var rm = sub.querySelector('#rmEx-'+ds); 
-      if(rm) rm.disabled=true; 
+      var rm = sub.querySelector('#rmEx-'+ds); if(rm) rm.disabled=true; 
       var exInp = sub.querySelector('#ex-'+ds); if(exInp) exInp.disabled=true;
       var cmEx = sub.querySelector('#cmEx-'+ds); if(cmEx) cmEx.disabled=true;
     }
@@ -163,7 +149,6 @@
     return [tr, sub];
   }
 
-
   function applyStateToUI(ds, habitual, variable){
     var st=rowState(ds);
     var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds);
@@ -175,7 +160,6 @@
     if(exInput && st.extraHours) exInput.value = st.extraHours;
     if($('cmEx-'+ds) && st.cmExtra) $('cmEx-'+ds).value = st.cmExtra;
 
-    // HS TRABAJADAS: SOLO horas (líneas separadas si hay habitual y extra)
     var hrsMain=$('hrs-'+ds); if(!hrsMain) return;
     hrsMain.innerHTML='';
     if(st.ab){
@@ -254,7 +238,6 @@
           }
           var cmInput=$('cm-'+ds); if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
           var rmEx=$('rmEx-'+ds);
-          // Auto-guardar extras al completar horas o comentario
           var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
           function autosaveExtra(){ var st=rowState(ds); var val=(exInput&&exInput.value||'').trim(); if(val){ st.ex=true; st.ok=true; st.ab=false; st.extraHours=val; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); } }
           if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
@@ -263,6 +246,7 @@
         })(ds,info);
       }
       $('submit-month').disabled = lock.locked;
+      $('reset-month').disabled = lock.locked;
     });
   }
 
@@ -284,9 +268,30 @@
 
   function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
 
-  // ===== No habitual: insertar/actualizar sin recargar todo =====
-  document.addEventListener('click', function(e){
-    if(e.target && e.target.id==='nh-save'){ /* placeholder */ }
+  function resetMonth(user){
+    var key=currentYM(); var db=firebase.firestore();
+    return db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
+      .then(function(snap){
+        var batch=db.batch(); snap.forEach(function(d){ batch.delete(d.ref); });
+        return batch.commit();
+      })
+      .then(function(){ return db.collection('locks').doc(user.uid+'_'+key).delete().catch(function(){}); })
+      .then(function(){ $('last-update').textContent=new Date().toLocaleString(); paintTable(user); });
+  }
+
+  $('submit-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    var key=currentYM();
+    setLock(u.uid,key,true).then(function(){ return getLock(u.uid,key); }).then(function(lk){
+      $('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
+      $('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
+      $('submit-month').disabled = lk.locked; $('reset-month').disabled = lk.locked;
+    });
+  });
+  $('reset-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    if(!confirm('¿Resetear la planilla del mes actual? Esto borra los registros del mes.')) return;
+    resetMonth(u);
   });
 
   $('nh-save').addEventListener('click', function(){
@@ -305,36 +310,6 @@
     }).then(function(){ setMsg($('nh-msg'),'Extra guardada',true); $('last-update').textContent=new Date().toLocaleString(); return addOrUpdateSingleRow(u, date); });
   });
 
-  // ===== Enviar planilla (lock) =====
-  
-  // Reset mes
-  function resetMonth(user){
-    var key=currentYM(); var db=firebase.firestore();
-    return db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
-      .then(function(snap){
-        var batch=db.batch(); snap.forEach(function(d){ batch.delete(d.ref); });
-        return batch.commit();
-      })
-      .then(function(){ return db.collection('locks').doc(user.uid+'_'+key).delete().catch(function(){}); })
-      .then(function(){ document.getElementById('last-update').textContent=new Date().toLocaleString(); paintTable(user); });
-  }
-
-  document.getElementById('reset-month').addEventListener('click', function(){
-    var u=firebase.auth().currentUser; if(!u) return;
-    if(!confirm('¿Resetear la planilla del mes actual? Esto borra los registros del mes.')) return;
-    resetMonth(u);
-  });
-$('submit-month').addEventListener('click', function(){
-    var u=firebase.auth().currentUser; if(!u) return;
-    var key=currentYM();
-    setLock(u.uid,key,true).then(function(){ return getLock(u.uid,key); }).then(function(lk){
-      $('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
-      $('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
-      $('submit-month').disabled = lk.locked;
-    });
-  });
-
-  // ===== Auth / Role / Switch =====
   $('register-btn').addEventListener('click', function(){
     firebase.auth().createUserWithEmailAndPassword($('email').value, $('password').value)
       .then(function(){ setMsg($('auth-msg'),'Cuenta creada',true); })
@@ -379,14 +354,13 @@ $('submit-month').addEventListener('click', function(){
         $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
         $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
       }else{
-        $('view-switch').classList.add('hidden'); // empleado NO ve admin
+        $('view-switch').classList.add('hidden');
         $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
       }
       paintTable(user);
     });
   });
 
-  // ===== Login robusto =====
   window.doLogin = function() {
     const btn = document.getElementById('login-btn');
     const msg = document.getElementById('auth-msg');
