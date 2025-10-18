@@ -16,12 +16,10 @@ const $ = (id)=>document.getElementById(id);
 function setMsg(el, text, good=false){ el.textContent=text; el.style.color = good?'#86efac':'#fecaca';}
 function fmtDate(d){ return d.toISOString().split('T')[0]; }
 function monthKey(date=new Date()){ return date.toISOString().slice(0,7); } // YYYY-MM
-function todayStr(){ return fmtDate(new Date()); }
-function setChip(id, val){ $(id).textContent = val; }
+function setChip(id, val){ const el=$(id); if(el) el.textContent = val; }
 function pad2(n){ return String(n).padStart(2,'0'); }
 function parseHM(s){
   if(!s) return null;
-  // Accept "09:00-18:00" or "09:00 a 18:00" or "9:00-18"
   const m = s.match(/(\d{1,2}):?(\d{2})?\s*(?:-|a|A)\s*(\d{1,2}):?(\d{2})?/);
   if(!m) return null;
   const h1 = parseInt(m[1],10), m1 = parseInt(m[2]||"0",10);
@@ -30,14 +28,8 @@ function parseHM(s){
   const diff = (end>=start? end-start : (24*60 - start + end));
   return { start, end, hours: (diff/60).toFixed(2) };
 }
-function weekdayKey(date){
-  // return mon,tue,wed,thu,fri,sat,sun
-  const idx = date.getDay(); // 0=Sun
-  return ['sun','mon','tue','wed','thu','fri','sat'][idx];
-}
-function weekdayNameEsLong(date){
-  return date.toLocaleDateString('es-AR', { weekday:'long' });
-}
+function weekdayKey(date){ return ['sun','mon','tue','wed','thu','fri','sat'][date.getDay()]; }
+function weekdayNameEsLong(date){ return date.toLocaleDateString('es-AR', { weekday:'long' }); }
 
 // ============ Elementos ============
 const authCard = $("auth-card");
@@ -46,35 +38,52 @@ const segEmp   = $("seg-employee");
 const segAdm   = $("seg-admin");
 const empView  = $("employee-view");
 const admView  = $("admin-view");
-const tblBody  = $("tbl-body");
 
-// login widgets
-$("tab-login").onclick = ()=>{ $("tab-login").classList.add('active'); $("tab-register").classList.remove('active'); }
-$("tab-register").onclick = ()=>{ $("tab-register").classList.add('active'); $("tab-login").classList.remove('active'); }
+// Admin tabs
+const tabEmp = $("tab-admin-employees");
+const tabSch = $("tab-admin-schedules");
+const tabMon = $("tab-admin-month");
+const adminEmployees = $("admin-employees");
+const adminSchedules = $("admin-schedules");
+const adminMonth     = $("admin-month");
+if(tabEmp&&tabSch&&tabMon){
+  tabEmp.onclick = ()=>{ tabEmp.classList.add("active"); tabSch.classList.remove("active"); tabMon.classList.remove("active"); adminEmployees.classList.remove("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.add("hidden"); };
+  tabSch.onclick = ()=>{ tabSch.classList.add("active"); tabEmp.classList.remove("active"); tabMon.classList.remove("active"); adminEmployees.classList.add("hidden"); adminSchedules.classList.remove("hidden"); adminMonth.classList.add("hidden"); };
+  tabMon.onclick = ()=>{ tabMon.classList.add("active"); tabEmp.classList.remove("active"); tabSch.classList.remove("active"); adminEmployees.classList.add("hidden"); adminSchedules.classList.add("hidden"); adminMonth.classList.remove("hidden"); };
+}
 
-$("login-btn").onclick = async ()=>{
+// login/register widgets
+const tabLogin=$("tab-login"), tabRegister=$("tab-register");
+if(tabLogin&&tabRegister){
+  tabLogin.onclick = ()=>{ tabLogin.classList.add('active'); tabRegister.classList.remove('active'); };
+  tabRegister.onclick = ()=>{ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); };
+}
+const loginBtn=$("login-btn"), registerBtn=$("register-btn"), resetBtn=$("reset-btn");
+if(loginBtn) loginBtn.onclick = async ()=>{
   try{ await auth.signInWithEmailAndPassword($("email").value, $("password").value);
     setMsg($("auth-msg"), "Ingreso correcto", true);
   }catch(e){ setMsg($("auth-msg"), e.message); }
 };
-$("register-btn").onclick = async ()=>{
+if(registerBtn) registerBtn.onclick = async ()=>{
   try{ await auth.createUserWithEmailAndPassword($("email").value, $("password").value);
     setMsg($("auth-msg"), "Cuenta creada. Ya podés ingresar.", true);
   }catch(e){ setMsg($("auth-msg"), e.message); }
 };
-$("reset-btn").onclick = async ()=>{
+if(resetBtn) resetBtn.onclick = async ()=>{
   try{ await auth.sendPasswordResetEmail($("email").value);
     setMsg($("auth-msg"), "Te enviamos un mail para blanquear.", true);
   }catch(e){ setMsg($("auth-msg"), e.message); }
 };
-$("logout-btn").onclick = ()=>auth.signOut();
+const logoutBtn=$("logout-btn"); if(logoutBtn) logoutBtn.onclick = ()=>auth.signOut();
 
-// Switch Admin/Empleado (visual; la habilitación real depende del rol)
-segEmp.onclick = ()=>{ segEmp.classList.add("active"); segAdm.classList.remove("active"); empView.classList.remove("hidden"); admView.classList.add("hidden"); };
-segAdm.onclick = ()=>{ segAdm.classList.add("active"); segEmp.classList.remove("active"); empView.classList.add("hidden"); admView.classList.remove("hidden"); };
+// Switch Admin/Empleado (visual)
+if(segEmp&&segAdm){
+  segEmp.onclick = ()=>{ segEmp.classList.add("active"); segAdm.classList.remove("active"); empView.classList.remove("hidden"); admView.classList.add("hidden"); };
+  segAdm.onclick = ()=>{ segAdm.classList.add("active"); segEmp.classList.remove("active"); empView.classList.add("hidden"); admView.classList.remove("hidden"); };
+}
 
 // ============ Roles ============
-const ADMIN_EMAILS = []; // ej: ["ale@hua.com"]
+const ADMIN_EMAILS = []; // ej: ["tu@empresa.com"]
 async function resolveRole(user){
   if(ADMIN_EMAILS.includes(user.email)) return "admin";
   try{
@@ -84,173 +93,63 @@ async function resolveRole(user){
   return "employee";
 }
 
-// ============ Empleado ============
-async function loadEmployeeConfig(uid){
-  const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
-  if(q.empty) return null;
-  return { id: q.docs[0].id, ...q.docs[0].data() };
-}
+// ================= Empleado (placeholder) ===============
+// (Luego implementamos la tabla detallada)
 
-async function loadLock(uid, ym){
-  const doc = await db.collection("locks").doc(`${uid}_${ym}`).get();
-  return doc.exists ? doc.data() : { locked:false, lastSubmitted:null };
+// ================= Admin: Empleados =====================
+async function fetchAllEmployees(){
+  const snap = await db.collection("employee_config").get();
+  return snap.docs.map(d=>({ id:d.id, ...d.data() }));
 }
-async function setLock(uid, ym, locked){
-  await db.collection("locks").doc(`${uid}_${ym}`).set({ locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null }, { merge:true });
+function renderEmployeeList(containerId, list, handler){
+  const el = $(containerId); if(!el) return; el.innerHTML = "";
+  list.forEach(v=>{
+    const wrap = document.createElement("div");
+    wrap.className = "item";
+    wrap.innerHTML = `<div><b>${v.nombre||"—"}</b><div class="muted tiny">${v.email||"—"} · <span class="chip">${v.userId||v.id}</span></div></div>
+                      <div class="row"><button class="btn small gray">Editar</button></div>`;
+    wrap.querySelector("button").onclick = ()=> handler(v);
+    el.appendChild(wrap);
+  });
 }
+async function loadAdminEmployees(){
+  const msg = $("adm-users-msg"); if(msg) msg.textContent="Cargando...";
+  const list = await fetchAllEmployees();
+  if(msg) msg.textContent="";
+  renderEmployeeList("adm-users-list", list, (v)=>{
+    $("adm-name").value = v.nombre||""; $("adm-email").value = v.email||""; $("adm-username").value = v.username||""; $("adm-uid").value = v.userId||v.id;
+  });
+}
+const saveEmpBtn=$("adm-save-employee");
+if(saveEmpBtn) saveEmpBtn.onclick = async ()=>{
+  const uid  = $("adm-uid").value.trim();
+  const email= $("adm-email").value.trim();
+  const name = $("adm-name").value.trim();
+  const username = $("adm-username").value.trim();
+  const msg = $("adm-msg");
 
-// Devuelve descripción de horario para un día en base a scheduleByDay
-function habitualForDay(scheduleByDay, date){
-  if(!scheduleByDay) return "";
-  const k = weekdayKey(date);
-  const day = scheduleByDay[k];
-  if(!day) return "";
-  if(day.off) return "No trabaja";
-  if(day.variable) return "";
-  const s = day.start||"", e = day.end||"";
-  return (s && e) ? `${s}-${e}` : "";
-}
-
-function renderDays(scheduleByDay){
-  tblBody.innerHTML = "";
-  const now = new Date();
-  const y = now.getFullYear(), m = now.getMonth();
-  const days = new Date(y, m+1, 0).getDate();
-  for(let d=1; d<=days; d++){
-    const date = new Date(y,m,d);
-    const ds = fmtDate(date);
-    const dowName = weekdayNameEsLong(date); // nombre completo
-    const habitual = habitualForDay(scheduleByDay, date);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td><b>${pad2(d)}</b> <span class="muted">(${dowName})</span></td>
-                    <td>${habitual||"—"}</td>
-                    <td id="hours-${ds}" class="muted">—</td>
-                    <td id="cell-${ds}"><span class="muted">—</span></td>`;
-    tblBody.appendChild(tr);
-  }
-}
-
-// Trae reportes del mes
-async function fetchMonthReports(uid){
-  const ym = monthKey();
-  const start = ym+"-01";
-  const end = ym+"-31";
-  const snap = await db.collection("timesheets")
-    .where("userId","==",uid).where("fecha",">=",start).where("fecha","<=",end).get();
-  const map = {};
-  snap.forEach(d=> map[d.data().fecha] = d.data());
-  return map;
-}
-function buttonsForDate(ds, habitual, locked){
-  if(locked) return `<span class="chip">Bloqueado</span>`;
-  const haveHabitual = !!habitual;
-  return `
-    ${haveHabitual ? `<button class="btn small good" onclick="markHabitual('${ds}')">Habitual</button>` : ``}
-    <button class="btn small bad" onclick="markAbsence('${ds}')">Falta</button>
-    <button class="btn small" onclick="openDetail('${ds}')">Detalle</button>`;
-}
-async function paintMonth(uid, scheduleByDay, locked){
-  const ym = monthKey();
-  const data = await fetchMonthReports(uid);
-  const y = new Date().getFullYear(), m = new Date().getMonth();
-  const days = new Date(y, m+1, 0).getDate();
-  for(let d=1; d<=days; d++){
-    const date = new Date(y,m,d);
-    const ds = fmtDate(date);
-    const habitual = habitualForDay(scheduleByDay, date);
-    const cell = $("cell-"+ds);
-    const hoursCell = $("hours-"+ds);
-    if(!cell || !hoursCell) continue;
-    const it = data[ds];
-    if(it){
-      const color = it.tipoReporte==="HABITUAL" ? "#86efac" : (it.tipoReporte==="FALTA" ? "#fecaca" : "#bfdbfe");
-      cell.innerHTML = `<span style="color:${color};font-weight:700">${it.tipoReporte}</span> <span class="muted">${it.horarioReportado||it.comentarios||""}</span>`;
-      const parsed = parseHM(it.horarioReportado || (it.tipoReporte==="HABITUAL"? habitual:""));
-      hoursCell.textContent = parsed ? `${parsed.hours} h` : "—";
+  if(!uid && !email){ setMsg(msg, "UID o Email requerido"); return; }
+  try{
+    if(uid){
+      const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
+      if(q.empty){ await db.collection("employee_config").add({ userId:uid, email, nombre:name, username }); }
+      else { await q.docs[0].ref.set({ userId:uid, email, nombre:name, username }, { merge:true }); }
     }else{
-      cell.innerHTML = buttonsForDate(ds, habitual, locked);
-      hoursCell.textContent = "—";
+      const q = await db.collection("employee_config").where("email","==",email).limit(1).get();
+      if(q.empty){ setMsg(msg, "Si no hay UID, primero creá el usuario y completá su UID.", false); return; }
+      else { await q.docs[0].ref.set({ email, nombre:name, username }, { merge:true }); }
     }
-  }
-}
-
-// Acciones rápidas
-window.markHabitual = async (ds)=>{
-  const u = auth.currentUser; if(!u) return;
-  const cfg = await loadEmployeeConfig(u.uid); if(!cfg) return;
-  const ex = await db.collection("timesheets").where("userId","==",u.uid).where("fecha","==",ds).limit(1).get();
-  if(!ex.empty){ setMsg($("emp-msg"), `Ya existe reporte para ${ds}`); return; }
-  // obtener habitual específico del día
-  const habitual = habitualForDay(cfg.scheduleByDay||{}, new Date(ds));
-  await db.collection("timesheets").add({
-    userId:u.uid, email:u.email, nombre: cfg.nombre||"", mesAnio: ds.slice(0,7),
-    fecha: ds, tipoReporte:"HABITUAL", horarioReportado: habitual, comentarios:"Horario habitual",
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  await bootEmployeeView(u); setMsg($("emp-msg"), `Guardado ${ds}`, true);
+    setMsg(msg, "Empleado guardado", true);
+    loadAdminEmployees();
+  }catch(e){ setMsg(msg, e.message); }
 };
-window.markAbsence = async (ds)=>{
-  const u = auth.currentUser; if(!u) return;
-  const ex = await db.collection("timesheets").where("userId","==",u.uid).where("fecha","==",ds).limit(1).get();
-  if(!ex.empty){ setMsg($("emp-msg"), `Ya existe reporte para ${ds}`); return; }
-  await db.collection("timesheets").add({
-    userId:u.uid, email:u.email, nombre:"", mesAnio: ds.slice(0,7),
-    fecha: ds, tipoReporte:"FALTA", horarioReportado:"", comentarios:"Ausencia",
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  await bootEmployeeView(u); setMsg($("emp-msg"), `Guardado como FALTA ${ds}`, true);
-};
-window.openDetail = (ds)=>{
-  $("extra-form").classList.remove("hidden");
-  $("extra-date").value = ds;
-};
-$("btn-extra-day").onclick = ()=>{ $("extra-form").classList.remove("hidden"); $("extra-date").value=""; };
-$("close-extra").onclick  = ()=>{ $("extra-form").classList.add("hidden"); };
-$("save-extra").onclick   = async ()=>{
-  const u = auth.currentUser; if(!u) return;
-  const date = $("extra-date").value, hours = $("extra-hours").value, notes = $("extra-notes").value;
-  if(!date || !hours){ setMsg($("extra-msg"), "Fecha y horario son obligatorios"); return; }
-  const ex = await db.collection("timesheets").where("userId","==",u.uid).where("fecha","==",date).limit(1).get();
-  if(!ex.empty){ setMsg($("extra-msg"), "Ya existe un reporte ese día"); return; }
-  await db.collection("timesheets").add({
-    userId:u.uid, email:u.email, nombre:"", mesAnio: date.slice(0,7),
-    fecha: date, tipoReporte:"EXTRA", horarioReportado: hours, comentarios: notes,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  setMsg($("extra-msg"), "Guardado", true);
-  await bootEmployeeView(u);
-  $("extra-form").classList.add("hidden");
-  $("extra-hours").value=""; $("extra-notes").value="";
+const resetEmpBtn=$("adm-reset");
+if(resetEmpBtn) resetEmpBtn.onclick = async ()=>{
+  try{ await auth.sendPasswordResetEmail($("adm-email").value.trim()); setMsg($("adm-msg"), "Email de blanqueo enviado", true); }
+  catch(e){ setMsg($("adm-msg"), e.message); }
 };
 
-$("btn-submit-month").onclick = async ()=>{
-  const u = auth.currentUser; if(!u) return;
-  const ym = monthKey();
-  await setLock(u.uid, ym, true);
-  await bootEmployeeView(u);
-  setMsg($("emp-msg"), "Planilla enviada y BLOQUEADA", true);
-};
-
-async function bootEmployeeView(user){
-  const ym = monthKey();
-  setChip("month-chip", ym);
-  const cfg = await loadEmployeeConfig(user.uid);
-  if(!cfg){ $("emp-name").textContent="(sin configurar)";
-    setMsg($("emp-msg"), "Tu usuario no está configurado. Pídele al admin que complete employee_config.");
-    renderDays({}); await paintMonth(user.uid, {}, false); return;
-  }
-  $("emp-name").textContent = cfg.nombre || user.email;
-  const lk = await loadLock(user.uid, ym);
-  setChip("lock-chip", lk.locked ? "Bloqueado" : "Editable");
-  setChip("last-update-chip", lk.lastSubmitted ? new Date(lk.lastSubmitted.toDate()).toLocaleString() : "—");
-  $("btn-submit-month").disabled = lk.locked;
-  $("btn-extra-day").disabled    = lk.locked;
-
-  renderDays(cfg.scheduleByDay||{});
-  await paintMonth(user.uid, cfg.scheduleByDay||{}, lk.locked);
-}
-
-// ============ Admin ============
+// ================= Admin: Horarios ======================
 function readDayInputs(prefix){
   return {
     start: ($(`${prefix}-start`).value||"").trim(),
@@ -259,71 +158,97 @@ function readDayInputs(prefix){
     variable: $(`${prefix}-var`).checked
   };
 }
-$("adm-upsert").onclick = async ()=>{
-  const uid  = $("adm-uid").value.trim();
-  const email= $("adm-email").value.trim();
-  const name = $("adm-name").value.trim();
-  const sched= $("adm-sched").value.trim();
-
-  if(!uid && !email){ setMsg($("adm-msg"), "UID o Email requerido"); return; }
-
+function fillDayInputs(prefix, obj){
+  $(`${prefix}-start`).value = obj?.start||"";
+  $(`${prefix}-end`).value   = obj?.end||"";
+  $(`${prefix}-off`).checked = !!obj?.off;
+  $(`${prefix}-var`).checked = !!obj?.variable;
+}
+let currentSchedUID = null;
+async function loadSchedulesPane(){
+  const msg = $("sched-users-msg"); if(msg) msg.textContent="Cargando...";
+  const list = await fetchAllEmployees();
+  if(msg) msg.textContent="";
+  renderEmployeeList("sched-users", list, (v)=>selectEmployeeForSchedule(v));
+}
+async function loadEmployeeConfigByUID(uid){
+  const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
+  if(q.empty) return null;
+  return { id:q.docs[0].id, ...q.docs[0].data() };
+}
+async function selectEmployeeForSchedule(v){
+  currentSchedUID = v.userId||v.id;
+  $("sched-emp-name").textContent = v.nombre||v.email||currentSchedUID;
+  const cfg = await loadEmployeeConfigByUID(currentSchedUID);
+  const sbd = cfg?.scheduleByDay||{};
+  fillDayInputs("mon", sbd.mon); fillDayInputs("tue", sbd.tue); fillDayInputs("wed", sbd.wed);
+  fillDayInputs("thu", sbd.thu); fillDayInputs("fri", sbd.fri); fillDayInputs("sat", sbd.sat); fillDayInputs("sun", sbd.sun);
+  $("adm-sched").value = cfg?.horarioHabitual||"";
+}
+const saveSchedBtn=$("save-schedule");
+if(saveSchedBtn) saveSchedBtn.onclick = async ()=>{
+  const msg = $("sched-msg");
+  if(!currentSchedUID){ setMsg(msg, "Elegí un empleado"); return; }
   const scheduleByDay = {
-    mon: readDayInputs("mon"),
-    tue: readDayInputs("tue"),
-    wed: readDayInputs("wed"),
-    thu: readDayInputs("thu"),
-    fri: readDayInputs("fri"),
-    sat: readDayInputs("sat"),
-    sun: readDayInputs("sun"),
+    mon: readDayInputs("mon"), tue: readDayInputs("tue"), wed: readDayInputs("wed"),
+    thu: readDayInputs("thu"), fri: readDayInputs("fri"), sat: readDayInputs("sat"), sun: readDayInputs("sun")
   };
-
   try{
-    let docRef = null;
-    if(uid){
-      // buscar por userId
-      const q = await db.collection("employee_config").where("userId","==",uid).limit(1).get();
-      if(q.empty){
-        docRef = await db.collection("employee_config").add({ userId: uid, email, nombre: name, horarioHabitual: sched, scheduleByDay });
-      }else{
-        await q.docs[0].ref.set({ userId: uid, email, nombre: name, horarioHabitual: sched, scheduleByDay }, { merge:true });
-        docRef = q.docs[0].ref;
-      }
-    }else{
-      // fallback por email
-      const q = await db.collection("employee_config").where("email","==",email).limit(1).get();
-      if(q.empty){
-        setMsg($("adm-msg"), "No hay UID ni config previa por email. Ingresá UID.", false);
-        return;
-      }else{
-        await q.docs[0].ref.set({ email, nombre: name, horarioHabitual: sched, scheduleByDay }, { merge:true });
-        docRef = q.docs[0].ref;
-      }
-    }
-    setMsg($("adm-msg"), "Guardado", true);
-    await listEmployees();
-  }catch(e){
-    setMsg($("adm-msg"), e.message);
+    const q = await db.collection("employee_config").where("userId","==",currentSchedUID).limit(1).get();
+    if(q.empty){ setMsg(msg, "Empleado sin config base (usa pestaña Empleados)", false); return; }
+    await q.docs[0].ref.set({ scheduleByDay, horarioHabitual: $("adm-sched").value.trim() }, { merge:true });
+    setMsg(msg, "Horario guardado", true);
+  }catch(e){ setMsg(msg, e.message); }
+};
+
+// ================= Admin: Estado mensual ================
+async function loadLock(uid, ym){
+  const doc = await db.collection("locks").doc(`${uid}_${ym}`).get();
+  return doc.exists ? doc.data() : { locked:false, lastSubmitted:null };
+}
+async function setLock(uid, ym, locked){
+  await db.collection("locks").doc(`${uid}_${ym}`).set({ locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null }, { merge:true });
+}
+async function employeeMonthStatus(uid, ym){
+  const lk = await loadLock(uid, ym);
+  return lk.locked ? `Bloqueado ${lk.lastSubmitted? "("+ new Date(lk.lastSubmitted.toDate()).toLocaleDateString()+")":""}` : "Editable";
+}
+async function listEmployeesMonth(){
+  const ym = ($("adm-month").value || monthKey()); $("adm-month").value = ym;
+  const tbody = $("adm-list"), msg = $("adm-list-msg");
+  tbody.innerHTML = ""; if(msg) msg.textContent="Cargando...";
+  const snap = await db.collection("employee_config").get();
+  if(msg) msg.textContent="";
+  if(snap.empty){ tbody.innerHTML = `<tr><td colspan="5">Sin empleados</td></tr>`; return; }
+  for (const d of snap.docs){
+    const v = d.data(); const uid = v.userId||d.id;
+    const status = await employeeMonthStatus(uid, ym);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${v.nombre||"—"}</td><td>${v.email||"—"}</td><td>${uid}</td>
+                    <td>${status}</td>
+                    <td class="row">
+                      <button class="btn small" onclick="inspectReports('${uid}','${v.nombre||""}','${ym}')">Ver</button>
+                      <button class="btn small good" onclick="quickLock('${uid}','${ym}',true)">Bloquear</button>
+                      <button class="btn small bad"  onclick="quickLock('${uid}','${ym}',false)">Permitir cambios</button>
+                    </td>`;
+    tbody.appendChild(tr);
   }
+}
+window.inspectReports = async (uid, name, ym)=>{
+  ym = ym || monthKey();
+  const start = ym+"-01", end = ym+"-31";
+  const snap = await db.collection("timesheets").where("userId","==",uid).where("fecha",">=",start).where("fecha","<=",end).get();
+  console.group(`Reportes de ${name||uid} (${ym})`);
+  snap.forEach(d=>{
+    const v = d.data(); console.log(`[${v.fecha}] ${v.tipoReporte} | ${v.horarioReportado||""} | ${v.comentarios||""}`);
+  });
+  console.groupEnd();
+  const msg = $("adm-list-msg"); if(msg) setMsg(msg, `Listados en consola ${name||uid}`, true);
 };
+window.quickLock = async (uid, ym, locked)=>{ await setLock(uid, ym, locked); await listEmployeesMonth(); };
 
-$("adm-reset").onclick = async ()=>{
-  try{ await auth.sendPasswordResetEmail($("adm-email").value.trim()); setMsg($("adm-msg"), "Email de blanqueo enviado", true); }
-  catch(e){ setMsg($("adm-msg"), e.message); }
-};
-
-$("adm-lock").onclick = async ()=>{
-  if(!$("adm-lock-uid").value || !$("adm-lock-month").value){ setMsg($("lock-msg"), "UID y mes requeridos"); return; }
-  await setLock($("adm-lock-uid").value, $("adm-lock-month").value, true);
-  setMsg($("lock-msg"), "Bloqueado", true);
-};
-$("adm-unlock").onclick = async ()=>{
-  if(!$("adm-lock-uid").value || !$("adm-lock-month").value){ setMsg($("lock-msg"), "UID y mes requeridos"); return; }
-  await setLock($("adm-lock-uid").value, $("adm-lock-month").value, false);
-  setMsg($("lock-msg"), "Desbloqueado", true);
-};
-
-$("adm-refresh").onclick = ()=> listEmployees();
-$("export-csv").onclick = async ()=>{
+const admRefresh=$("adm-refresh"); if(admRefresh) admRefresh.onclick = ()=> listEmployeesMonth();
+const exportBtn=$("export-csv"); if(exportBtn) exportBtn.onclick = async ()=>{
   const snap = await db.collection("timesheets").get();
   if(snap.empty){ setMsg($("adm-list-msg"), "Sin datos"); return; }
   let csv = "Nombre;Email;Fecha;Mes_Anio;Tipo;Detalle;Comentarios;UID\n";
@@ -338,64 +263,33 @@ $("export-csv").onclick = async ()=>{
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 };
 
-async function employeeMonthStatus(uid, ym){
-  const lk = await loadLock(uid, ym);
-  return lk.locked ? `Bloqueado ${lk.lastSubmitted? "("+ new Date(lk.lastSubmitted.toDate()).toLocaleDateString()+")":""}` : "Editable";
-}
-async function listEmployees(){
-  const ym = ($("adm-month").value || monthKey());
-  $("adm-month").value = ym;
-  $("adm-list").innerHTML = ""; $("adm-list-msg").textContent="Cargando...";
-  const snap = await db.collection("employee_config").get();
-  $("adm-list-msg").textContent="";
-  if(snap.empty){ $("adm-list").innerHTML = `<tr><td colspan="6">Sin empleados</td></tr>`; return; }
-  for (const d of snap.docs){
-    const v = d.data();
-    const status = await employeeMonthStatus(v.userId||d.id, ym);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${v.nombre||"—"}</td><td>${v.email||"—"}</td><td>${v.horarioHabitual||"—"}</td><td>${v.userId||d.id}</td>
-                    <td>${status}</td>
-                    <td><button class="btn small" onclick="inspectReports('${v.userId||d.id}','${v.nombre||""}','${ym}')">Ver reportes</button></td>`;
-    $("adm-list").appendChild(tr);
-  }
-}
-
-window.inspectReports = async (uid, name, ym)=>{
-  ym = ym || monthKey();
-  const start = ym+"-01", end = ym+"-31";
-  const snap = await db.collection("timesheets").where("userId","==",uid).where("fecha",">=",start).where("fecha","<=",end).get();
-  console.group(`Reportes de ${name||uid} (${ym})`);
-  snap.forEach(d=>{
-    const v = d.data(); console.log(`[${v.fecha}] ${v.tipoReporte} | ${v.horarioReportado||""} | ${v.comentarios||""}`);
-  });
-  console.groupEnd();
-  setMsg($("adm-list-msg"), `Listados en consola ${name||uid}`, true);
-};
-
-// ============ Auth State ============
+// ================== Auth State ==========================
 auth.onAuthStateChanged(async (user)=>{
-  $("env-chip").textContent = "Conectado";
+  setChip("env-chip", "Conectado");
   if(!user){
     authCard.classList.remove("hidden");
     appCard.classList.add("hidden");
-    $("user-email").textContent="—";
-    $("role-chip").textContent="—";
+    setChip("user-email","—");
+    setChip("role-chip","—");
     return;
   }
-  $("user-email").textContent = user.email;
+  setChip("user-email", user.email);
   authCard.classList.add("hidden");
   appCard.classList.remove("hidden");
 
   const role = await resolveRole(user);
-  $("role-chip").textContent = role.toUpperCase();
+  setChip("role-chip", role.toUpperCase());
 
-  if(role === "admin"){
-    segAdm.classList.add("active"); segEmp.classList.remove("active");
-    empView.classList.add("hidden"); admView.classList.remove("hidden");
-    await listEmployees();
-  }else{
-    segEmp.classList.add("active"); segAdm.classList.remove("active");
-    empView.classList.remove("hidden"); admView.classList.add("hidden");
-    await bootEmployeeView(user);
+  if(segEmp&&segAdm){
+    if(role === "admin"){
+      segAdm.classList.add("active"); segEmp.classList.remove("active");
+      empView.classList.add("hidden"); admView.classList.remove("hidden");
+      await loadAdminEmployees();
+      await loadSchedulesPane();
+      await listEmployeesMonth();
+    }else{
+      segEmp.classList.add("active"); segAdm.classList.remove("active");
+      empView.classList.remove("hidden"); admView.classList.add("hidden");
+    }
   }
 });
