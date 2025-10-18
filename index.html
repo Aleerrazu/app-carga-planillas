@@ -41,18 +41,18 @@
     <div class="brand">
       <div class="dot"></div>
       <div class="title">Control Horario · Panel</div>
-      <div class="chip" id="version-chip">v2025.10.18-1547 UTC</div>
+      <div class="chip" id="version-chip">v2025.10.18-1635 UTC</div>
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
-      <button class="btn small" id="logout-btn">Salir</button>
+      <button class="btn small" id="logout-btn" type="button">Salir</button>
     </div>
 
     <div id="view-switch" class="row hidden" style="margin-bottom:8px;justify-content:flex-end">
       <div class="chip" id="role-chip">—</div>
       <div style="width:8px"></div>
       <div>
-        <button class="btn small ghost" id="to-employee">Empleado</button>
-        <button class="btn small" id="to-admin">Admin</button>
+        <button class="btn small ghost" id="to-employee" type="button">Empleado</button>
+        <button class="btn small" id="to-admin" type="button">Admin</button>
       </div>
     </div>
 
@@ -62,16 +62,15 @@
         <div><label>Email</label><input id="email" type="email" placeholder="tu@email.com"/></div>
         <div><label>Contraseña</label><input id="password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){doLogin();}"/></div>
         <div style="align-self:end" class="row">
-          <button class="btn" id="login-btn" onclick="doLogin()">Entrar</button>
-          <button class="btn" id="register-btn">Crear cuenta</button>
-          <button class="btn" id="reset-btn">Blanquear</button>
+          <button class="btn" id="login-btn" type="button" onclick="doLogin()">Entrar</button>
+          <button class="btn" id="register-btn" type="button">Crear cuenta</button>
+          <button class="btn" id="reset-btn" type="button">Blanquear</button>
         </div>
       </div>
       <div class="msg" id="auth-msg"></div>
     </div>
 
     <div id="app-card" class="card pad hidden">
-      <!-- EMPLEADO -->
       <div id="employee-view">
         <div class="row sp">
           <div class="row">
@@ -86,7 +85,7 @@
             <div class="chip">Estado: <span id="lock-state">—</span></div>
           </div>
           <div class="row">
-            <button class="btn" id="submit-month">Enviar planilla</button>
+            <button class="btn" id="submit-month" type="button">Enviar planilla</button>
           </div>
         </div>
 
@@ -107,36 +106,20 @@
             <div><label>Horario (HH-HH)</label><input id="nh-range" placeholder="16-20"></div>
             <div><label>Comentario</label><input id="nh-notes" placeholder="Guardia / reemplazo"></div>
           </div>
-          <div class="row" style="margin-top:8px"><button class="btn" id="nh-save">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
+          <div class="row" style="margin-top:8px"><button class="btn" id="nh-save" type="button">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
         </div>
         <div class="msg" id="emp-msg"></div>
       </div>
 
-      <!-- ADMIN -->
       <div id="admin-view" class="hidden">
-        <div class="pad"><b>Panel de Administración</b><div class="muted">En cuentas admin se muestra esta vista (oculta para empleados).</div></div>
+        <div class="pad"><b>Panel de Administración</b><div class="muted">(Oculto para empleados. Para admins queda el switch arriba.)</div></div>
       </div>
     </div>
   </div>
 
-  <!-- Fallback doLogin -->
-  <script>
-    function doLogin(){
-      var btn=document.getElementById('login-btn');
-      var msg=document.getElementById('auth-msg');
-      btn.disabled=true; btn.textContent='Ingresando...';
-      firebase.auth().signInWithEmailAndPassword(
-        document.getElementById('email').value,
-        document.getElementById('password').value
-      ).then(function(){ msg.textContent='Ingreso correcto'; msg.style.color='#86efac'; })
-       .catch(function(e){ console.error(e); msg.textContent=e.message||'No se pudo ingresar'; msg.style.color='#fecaca'; })
-       .finally(function(){ btn.disabled=false; btn.textContent='Entrar'; });
-    }
-  </script>
-
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=v2025.10.18-1547 UTC"></script>
+  <script src="app.js?v=v2025.10.18-1635 UTC"></script>
 </body>
 </html>
