@@ -1,4 +1,5 @@
 (function(){
+  // ================= Firebase =================
   var firebaseConfig = {
     apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
     authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
@@ -9,6 +10,7 @@
   };
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
+  // ================= Utils =================
   function $(id){ return document.getElementById(id); }
   function fmt(d){ return d.toISOString().split('T')[0]; }
   function ym(d){ return d.toISOString().slice(0,7); }
@@ -26,6 +28,7 @@
   }
   function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
+  // ================= Data helpers =================
   function getRole(uid){
     return firebase.firestore().collection('roles').doc(uid).get().then(function(r){
       return (r.exists && r.data() && r.data().role==='admin') ? 'admin' : 'employee';
@@ -55,6 +58,7 @@
       .then(function(d){ return d.exists ? d.data() : null; });
   }
 
+  // ================= Mes (selects) =================
   function buildMonthSelectors(){
     var now=new Date(), y=now.getFullYear();
     var selM=$('sel-month'), selY=$('sel-year');
@@ -67,6 +71,7 @@
   }
   function currentYM(){ return ymFromParts($('sel-year').value, $('sel-month').value); }
 
+  // ================= Filas/estado =================
   function habitualForDay(sbd, d){
     var o = (sbd && sbd[wkey(d)]) || {};
     if(o.off) return {text:null, variable:false, skip:true};
@@ -109,7 +114,7 @@
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML='<td>Extra</td>'+
                   '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'+
-                  '<td id="hrsEx-'+ds+'" class="muted">—</td>'+
+                  '<td id="hrsEx-'+ds}" class="muted">—</td>'+
                   '<td class="icon-row"><button class="btn small" id="saveEx-'+ds+'">Guardar</button><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'+
                   '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
     if(locked){ var s1=sub.querySelector('#saveEx-'+ds), s2=sub.querySelector('#rmEx-'+ds); if(s1) s1.disabled=true; if(s2) s2.disabled=true; }
@@ -127,13 +132,16 @@
 
   function applyStateToUI(ds, habitual, variable){
     var st=rowState(ds);
-    var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds), hrsEx=$('hrsEx-'+ds);
+    var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds);
+    var hrsEx = document.getElementById('hrsEx-'+ds) || null;
+
     if(ok) ok.classList.toggle('active', !!st.ok);
     if(ab) ab.classList.toggle('active', !!st.ab);
     if(exb) exb.classList.toggle('active', !!st.ex);
     if(exInput && st.extraHours) exInput.value = st.extraHours;
     if($('cmEx-'+ds) && st.cmExtra) $('cmEx-'+ds).value = st.cmExtra;
 
+    // HS TRABAJADAS: SOLO horas (líneas separadas si hay habitual y extra)
     var hrsMain=$('hrs-'+ds); if(!hrsMain) return;
     hrsMain.innerHTML='';
     if(st.ab){
@@ -141,23 +149,26 @@
       if(hrsEx) hrsEx.textContent='—';
       return;
     }
+    var pusoAlgo=false;
     if(st.ok){
       var h=habitual;
       if(variable){ var v=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v) h=v; }
       var p=parseHM(h);
-      var chip=document.createElement('span'); chip.className='tag'; chip.textContent = p? (p.hours+' h (hab)'):'—';
+      var chip=document.createElement('span'); chip.className='tag'; chip.textContent = p? (p.hours+' h'):'—';
       hrsMain.appendChild(chip);
+      pusoAlgo=true;
     }
     if(st.ex){
       var t=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||'').trim();
       var p2=parseHM(t);
-      var chip2=document.createElement('span'); chip2.className='tag'; chip2.textContent = p2? (p2.hours+' h (extra)'):'—';
+      var chip2=document.createElement('span'); chip2.className='tag'; chip2.textContent = p2? (p2.hours+' h'):'—';
       hrsMain.appendChild(chip2);
       if(hrsEx) hrsEx.textContent = p2? (p2.hours+' h') : '—';
+      pusoAlgo=true;
     }else{
       if(hrsEx) hrsEx.textContent='—';
     }
-    if(!st.ok && !st.ex){
+    if(!pusoAlgo){
       var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
     }
   }
@@ -173,7 +184,7 @@
     var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
     if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
     return getConfig(user.uid).then(function(cfg){
-      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
+      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
         .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
     });
   }
@@ -235,11 +246,11 @@
 
   function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
 
+  // ===== No habitual: insertar/actualizar sin recargar todo =====
   document.addEventListener('click', function(e){
-    if(e.target && e.target.id==='nh-save'){ /* placeholder to ensure listener attaches if script reloads */ }
+    if(e.target && e.target.id==='nh-save'){ /* placeholder */ }
   });
 
-  // ===== No habitual: insertar/actualizar sin recargar todo =====
   $('nh-save').addEventListener('click', function(){
     var u=firebase.auth().currentUser; if(!u) return;
     var key=currentYM();
@@ -256,6 +267,7 @@
     }).then(function(){ setMsg($('nh-msg'),'Extra guardada',true); $('last-update').textContent=new Date().toLocaleString(); return addOrUpdateSingleRow(u, date); });
   });
 
+  // ===== Enviar planilla (lock) =====
   $('submit-month').addEventListener('click', function(){
     var u=firebase.auth().currentUser; if(!u) return;
     var key=currentYM();
@@ -266,6 +278,7 @@
     });
   });
 
+  // ===== Auth / Role / Switch =====
   $('register-btn').addEventListener('click', function(){
     firebase.auth().createUserWithEmailAndPassword($('email').value, $('password').value)
       .then(function(){ setMsg($('auth-msg'),'Cuenta creada',true); })
@@ -310,7 +323,7 @@
         $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
         $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
       }else{
-        $('view-switch').classList.add('hidden');
+        $('view-switch').classList.add('hidden'); // empleado NO ve admin
         $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
       }
       paintTable(user);

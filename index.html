@@ -41,12 +41,13 @@
     <div class="brand">
       <div class="dot"></div>
       <div class="title">Control Horario · Panel</div>
-      <div class="chip" id="version-chip">v2025.10.18-1635 UTC</div>
+      <div class="chip" id="version-chip">v2025.10.18-1653 UTC</div>
       <div style="flex:1"></div>
       <div class="muted" id="user-email">—</div>
       <button class="btn small" id="logout-btn" type="button">Salir</button>
     </div>
 
+    <!-- Switch solo visible para admins -->
     <div id="view-switch" class="row hidden" style="margin-bottom:8px;justify-content:flex-end">
       <div class="chip" id="role-chip">—</div>
       <div style="width:8px"></div>
@@ -56,6 +57,7 @@
       </div>
     </div>
 
+    <!-- LOGIN -->
     <div id="auth-card" class="card pad">
       <div class="row sp"><b>Ingresar</b></div>
       <div class="grid grid-3" style="grid-template-columns:1fr 1fr auto">
@@ -70,7 +72,9 @@
       <div class="msg" id="auth-msg"></div>
     </div>
 
+    <!-- APP -->
     <div id="app-card" class="card pad hidden">
+      <!-- EMPLEADO -->
       <div id="employee-view">
         <div class="row sp">
           <div class="row">
@@ -111,15 +115,19 @@
         <div class="msg" id="emp-msg"></div>
       </div>
 
+      <!-- ADMIN -->
       <div id="admin-view" class="hidden">
         <div class="pad"><b>Panel de Administración</b><div class="muted">(Oculto para empleados. Para admins queda el switch arriba.)</div></div>
       </div>
     </div>
   </div>
 
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-  <script src="app.js?v=v2025.10.18-1635 UTC"></script>
+
+  <!-- App con cache-buster -->
+  <script src="app.js?v=v2025.10.18-1653 UTC"></script>
 </body>
 </html>
