@@ -82,11 +82,11 @@
   function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
     var tr=document.createElement('tr'); tr.id='row-'+ds;
 
-    var td1=document.createElement('td'); 
+    var td1=document.createElement('td'); // DÍA
     var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
     td1.appendChild(b);
 
-    var td2=document.createElement('td');
+    var td2=document.createElement('td'); // HORARIO HABITUAL
     if(variable){ 
       var inp=document.createElement('input'); 
       inp.id='var-'+ds; 
@@ -96,12 +96,8 @@
     } else { 
       td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); 
     }
-
-    var td3=document.createElement('td'); 
-    td3.id='hrs-'+ds; 
-    td3.className='stack muted'; 
-    td3.innerHTML='<span class="tag">—</span>';
-
+    
+    // TD4 (ACCIONES) - SE CREA AQUÍ
     var td4=document.createElement('td'); 
     td4.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
@@ -118,18 +114,28 @@
       });
     }
 
-    var td5=document.createElement('td'); 
+    var td3=document.createElement('td'); // HS TRABAJADAS - SE CREA AQUÍ
+    td3.id='hrs-'+ds; 
+    td3.className='stack muted'; 
+    td3.innerHTML='<span class="tag">—</span>';
+
+    var td5=document.createElement('td'); // COMENTARIO
     var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
     td5.appendChild(cm);
 
-    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
+    // SE AÑADEN EN EL NUEVO ORDEN: TD1, TD2, TD4, TD3, TD5
+    tr.appendChild(td1); 
+    tr.appendChild(td2); 
+    tr.appendChild(td4); 
+    tr.appendChild(td3); 
+    tr.appendChild(td5);
 
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML= ''
       + '<td>Extra</td>'
       + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'
-      + '<td id="hrsEx-'+ds+'" class="muted">—</td>'
       + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'
+      + '<td id="hrsEx-'+ds+'" class="muted">—</td>' // Intercambiado para que coincida con la HS TRABAJADAS
       + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
 
     if(locked){ 
@@ -191,7 +197,7 @@
       if(hrsEx) hrsEx.textContent='—';
     }
     if(!pusoAlgo){
-      var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
+      var dash=document.createElement('span'); dash.textContent='—'; hrsMain.appendChild(dash);
     }
   }
 
@@ -414,4 +420,4 @@
   };
 })();
 
-// vfix-2025.10.18-220505-single-row-clean
+// vfix-2025.10.18-220505-single-row-clean-final
