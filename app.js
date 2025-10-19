@@ -220,12 +220,15 @@
 
   function persistState(user, ds, key, habitual, variable){
     var st=rowState(ds);
-    var tipo=null, hr="", com=(($('cm-'+ds)&&$('cm-'+ds).value)||"").trim();
-    var cmEx=(($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"").trim();
     
-    // Sincronizar estado interno con los inputs antes de guardar (para evitar que se pierdan datos si el estado interno no se actualizó)
-    st.comment = com;
-    st.cmExtra = cmEx;
+    // **************** CRITICAL FIX: SINCRONIZAR INPUTS ****************
+    // Se asegura que el estado interno refleje lo que el usuario escribió
+    st.comment = ($('cm-'+ds)&&$('cm-'+ds).value)||"";
+    st.cmExtra = ($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"";
+    st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||"";
+    setRowState(ds, st); // Actualizar el estado para los cálculos
+
+    var tipo=null, hr="", com=st.comment, cmEx=st.cmExtra;
     
     // Si es horario variable y está marcado como OK, la hora reportada debe tomar el valor del input variable
     if (variable && st.ok) {
@@ -233,10 +236,10 @@
         if (v) habitual = v;
     }
     
-    if(st.ok && st.ex){ var h=habitual; hr=h+" + "+(st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim()); tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
+    if(st.ok && st.ex){ var h=habitual; hr=h+" + "+st.extraHours; tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
     else if(st.ok){ var h2=habitual; hr=h2; tipo='HABITUAL'; }
     else if(st.ab){ tipo='FALTA'; hr=""; }
-    else if(st.ex){ hr=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim(); tipo='EXTRA'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
+    else if(st.ex){ hr=st.extraHours; tipo='EXTRA'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
     
     var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
     
@@ -275,18 +278,7 @@
         savePromises.push(cfgPromise.then(cfg => {
           const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
           
-          // FORZAR SINCRONIZACIÓN DE ESTADO DE INPUTS
-          const st = rowState(ds);
-          st.comment = ($('cm-'+ds) && $('cm-'+ds).value) || "";
-          
-          const exInput = $('ex-'+ds);
-          if (exInput) st.extraHours = (exInput.value || '').trim();
-          const cmx = $('cmEx-'+ds);
-          if (cmx) st.cmExtra = (cmx.value || '').trim();
-          
-          setRowState(ds, st);
-          applyStateToUI(ds, info.text, info.variable); // Refrescar UI (horas)
-          
+          // La sincronización de inputs ahora está en persistState, pero forzamos el llamado.
           return persistState(user, ds, key, info.text, info.variable);
         }));
       }
