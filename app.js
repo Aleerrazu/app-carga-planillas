@@ -243,17 +243,46 @@
           if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
           applyStateToUI(ds,info.text,info.variable);
+          
           if(existing[ds]){
             var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
+            
             if(existing[ds].tipoReporte==='EXTRA'){ var exI=$('ex-'+ds); if(exI) exI.value=existing[ds].horarioReportado||""; var st=rowState(ds); st.ex=true; st.extraHours=existing[ds].horarioReportado||""; setRowState(ds,st); }
             if(existing[ds].tipoReporte==='MIXTO'){ var parts=(existing[ds].horarioReportado||"").split('+'); var exP=(parts[1]||"").trim(); var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); }
+            
             if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
             applyStateToUI(ds,info.text,info.variable);
           }
-          var cmInput=$('cm-'+ds); if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
+          
+          // **********************************************
+          // ** CORRECCIÓN DE PERSISTENCIA (BLUR EVENTS) **
+          // **********************************************
+          var cmInput=$('cm-'+ds); 
+          // Evento de Guardado para Comentario (al salir del campo)
+          if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
+          
+          // Evento de Guardado para Horario Variable (si aplica)
+          var varInput = $('var-'+ds);
+          if (varInput) varInput.addEventListener('blur', function(){ 
+              applyStateToUI(ds, info.text, info.variable); // Vuelve a calcular las horas
+              persistState(user,ds,key,info.text,info.variable); 
+          });
+
           var rmEx=$('rmEx-'+ds);
           var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
-          function autosaveExtra(){ var st=rowState(ds); var val=(exInput&&exInput.value||'').trim(); if(val){ st.ex=true; st.ok=true; st.ab=false; st.extraHours=val; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); } }
+          function autosaveExtra(){ 
+              var st=rowState(ds); 
+              var val=(exInput&&exInput.value||'').trim(); 
+              if(val){ 
+                  st.ex=true; 
+                  st.ok=true; 
+                  st.ab=false; 
+                  st.extraHours=val; 
+                  setRowState(ds,st); 
+                  applyStateToUI(ds,info.text,info.variable); 
+                  persistState(user,ds,key,info.text,info.variable); 
+              } 
+          }
           if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
           if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
           if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
