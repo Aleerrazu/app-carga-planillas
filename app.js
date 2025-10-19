@@ -113,23 +113,24 @@
         firebase.firestore().collection('timesheets').doc(u.uid+'_'+ds).delete().then(function(){ paintCurrentUser(); });
       });
     }
-
-    // TD4 se convierte en HS TRABAJADAS
-    var td4_hrs=document.createElement('td'); 
-    td4_hrs.id='hrs-'+ds; 
-    td4_hrs.className='stack muted'; 
-    td4_hrs.innerHTML='<span class="tag">—</span>';
-
-    var td5=document.createElement('td'); // COMENTARIO
+    
+    // TD4 se convierte en COMENTARIO
+    var td4_comment=document.createElement('td'); 
     var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
-    td5.appendChild(cm);
+    td4_comment.appendChild(cm);
 
-    // SE AÑADEN EN EL NUEVO ORDEN: TD1, TD2, TD3(ACTIONS), TD4(HRS), TD5
+    // TD5 se convierte en HS TRABAJADAS (Final)
+    var td5_hrs=document.createElement('td'); 
+    td5_hrs.id='hrs-'+ds; 
+    td5_hrs.className='stack muted'; 
+    td5_hrs.innerHTML='<span class="tag">—</span>';
+
+    // SE AÑADEN EN EL NUEVO ORDEN: TD1, TD2, TD3(ACTIONS), TD4(COMMENT), TD5(HRS)
     tr.appendChild(td1); 
     tr.appendChild(td2); 
     tr.appendChild(td3_actions); 
-    tr.appendChild(td4_hrs); 
-    tr.appendChild(td5);
+    tr.appendChild(td4_comment); 
+    tr.appendChild(td5_hrs);
 
     // Subfila para EXTRA, ajustando el orden de sus celdas para que coincida con la principal
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
@@ -137,8 +138,8 @@
       + '<td>Extra</td>' // DÍA
       + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>' // HORARIO HABITUAL
       + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>' // ACCIONES (Botón Quitar)
-      + '<td id="hrsEx-'+ds+'" class="muted">—</td>' // HS TRABAJADAS
-      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>'; // COMENTARIO (Extra)
+      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>' // COMENTARIO (Extra)
+      + '<td id="hrsEx-'+ds+'" class="muted">—</td>'; // HS TRABAJADAS (Extra)
 
     if(locked){ 
       var rm = sub.querySelector('#rmEx-'+ds); if(rm) rm.disabled=true; 
