@@ -221,11 +221,11 @@
   function persistState(user, ds, key, habitual, variable){
     var st=rowState(ds);
     
-    // **************** CRITICAL FIX: SINCRONIZAR INPUTS ****************
-    // Se asegura que el estado interno refleje lo que el usuario escribió
+    // **************** CRITICAL FIX: SINCRONIZAR INPUTS EN ESTADO INTERNO ****************
+    // Se asegura que el estado interno refleje lo que el usuario escribió ANTES de la lógica
     st.comment = ($('cm-'+ds)&&$('cm-'+ds).value)||"";
     st.cmExtra = ($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"";
-    st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||"";
+    st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||""; // Captura el valor del input de extra
     setRowState(ds, st); // Actualizar el estado para los cálculos
 
     var tipo=null, hr="", com=st.comment, cmEx=st.cmExtra;
@@ -278,7 +278,9 @@
         savePromises.push(cfgPromise.then(cfg => {
           const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
           
-          // La sincronización de inputs ahora está en persistState, pero forzamos el llamado.
+          // FORZAR SINCRONIZACIÓN DE ESTADO DE INPUTS
+          // Esto se hace dentro de persistState, solo necesitamos llamarlo.
+          
           return persistState(user, ds, key, info.text, info.variable);
         }));
       }
