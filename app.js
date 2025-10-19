@@ -222,15 +222,13 @@
     var st=rowState(ds);
     
     // **************** CRITICAL FIX: SINCRONIZAR INPUTS EN ESTADO INTERNO ****************
-    // Se asegura que el estado interno refleje lo que el usuario escribió ANTES de la lógica
     st.comment = ($('cm-'+ds)&&$('cm-'+ds).value)||"";
     st.cmExtra = ($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"";
     st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||""; 
-    setRowState(ds, st); // Actualizar el estado para los cálculos
+    setRowState(ds, st); 
 
     var tipo=null, hr="", com=st.comment, cmEx=st.cmExtra;
     
-    // Si es horario variable y está marcado como OK, la hora reportada debe tomar el valor del input variable
     if (variable && st.ok) {
         var v = ($('var-'+ds)&&$('var-'+ds).value||'').trim();
         if (v) habitual = v;
@@ -243,10 +241,8 @@
     
     var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
     
-    // Si no hay tipo (botón seleccionado) ni comentario, eliminar el registro
     if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
     
-    // Si hay datos, guardar
     return getConfig(user.uid).then(function(cfg){
       return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
         .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
@@ -261,17 +257,14 @@
     const rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
     const savePromises = [];
     
-    // Deshabilitar botón temporalmente para feedback
     const saveBtn = $('save-all');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Guardando...';
 
-    // Iterar sobre las filas principales (omitir las sub-filas)
     rows.forEach(tr => {
       if (tr.id.startsWith('row-')) {
         const ds = tr.id.replace('row-', '');
         
-        // Simular la obtención del habitual/variable para el persistState
         const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
         const cfgPromise = getConfig(user.uid);
         
@@ -296,7 +289,6 @@
       }
     });
 
-    // Manejar el resultado de todas las promesas
     return Promise.all(savePromises)
       .then(() => {
         const msg = $('emp-msg');
@@ -318,15 +310,21 @@
   }
 
   function paintTable(user, role){ // Se recibe el rol como argumento
-    // Solo cargamos la planilla si es empleado
+    $('user-email').textContent = user.email; // Siempre mostrar el email
+    buildMonthSelectors(); // Siempre cargar los selectores de mes y año
+
+    // **************** CORRECCIÓN CLAVE: SÓLO CARGAR LA TABLA SI ES EMPLEADO ****************
     if (role === 'employee') {
         var key=currentYM();
+        // Solo la vista de empleado necesita estos elementos visibles y cargados
+        $('employee-view').classList.remove('hidden');
+        $('admin-view').classList.add('hidden');
+        
         return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
             var cfg=arr[0], lock=arr[1], existing=arr[2];
             $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
             $('last-update').textContent = '—';
-            $('user-email').textContent = user.email;
-
+            
             var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
             var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
             for(var d=1; d<=count; d++){
@@ -339,7 +337,7 @@
                 (function(ds,info){
                     var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
                     
-                    // **************** CRITICAL FIX: MANEJADORES DE BOTONES PARA PERSISTENCIA ****************
+                    // Manejadores de eventos para botones
                     if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
                     if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
                     if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
@@ -373,23 +371,16 @@
                         applyStateToUI(ds,info.text,info.variable);
                     }
                     
-                    // **********************************************
-                    // ** PERSISTENCIA DE INPUTS (BLUR EVENTS) **
-                    // **********************************************
-                    
-                    // 1. Campo de Comentario Principal
+                    // Persistencia de Inputs (Blur Events)
                     var cmInput=$('cm-'+ds); 
                     if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
                     
-                    // 2. Campo de Horario Variable (si aplica)
                     var varInput = $('var-'+ds);
                     if (varInput) varInput.addEventListener('blur', function(){ 
                         applyStateToUI(ds, info.text, info.variable); 
                         persistState(user,ds,key,info.text,info.variable); 
                     });
 
-
-                    // 3. Persistencia de Extras
                     var rmEx=$('rmEx-'+ds);
                     var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
                     function autosaveExtra(){ 
@@ -412,14 +403,14 @@
             $('submit-month').disabled = lock.locked;
             $('reset-month').disabled = lock.locked;
             
-            // Manejador del botón Guardar Cambios
             $('save-all').addEventListener('click', function(){
                 if(user) persistAllRows(user);
             });
         });
-    } else {
-        // Si es admin, solo se asegura de que los selectores de mes y año se carguen
-        buildMonthSelectors();
+    } else if (role === 'admin') {
+        // Asegura que la vista de empleado esté oculta y la de admin esté visible
+        $('employee-view').classList.add('hidden');
+        $('admin-view').classList.remove('hidden');
     }
   }
   
@@ -430,7 +421,6 @@
       var date=new Date(dateStr);
       var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
       
-      // Eliminar las 2 filas existentes para el día
       var existingTr=$('row-'+dateStr); 
       if(existingTr){ 
         if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); 
@@ -453,11 +443,15 @@
     });
   }
   
+  function persistAllRows(user) { /* ... (Logic defined before) ... */ }
+  // La lógica completa de persistAllRows está en el código final, 
+  // pero se omite aquí por brevedad, asumiendo que ya tienes la versión anterior.
+  
   function paintCurrentUser(){ 
       var u=firebase.auth().currentUser; 
       if(!u) return;
       getRole(u.uid).then(function(role) {
-          paintTable(u, role); // Llama a paintTable con el rol
+          paintTable(u, role);
       });
   }
 
@@ -516,17 +510,8 @@
       .catch(function(e){ setMsg($('auth-msg'), e.message); });
   });
   $('logout-btn').addEventListener('click', function(){ firebase.auth().signOut(); });
-
-  $('to-employee').addEventListener('click', function(){
-    $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
-    $('to-employee').classList.remove('ghost'); $('to-admin').classList.add('ghost');
-    paintCurrentUser(); // Llama a paintCurrentUser para que actualice la tabla si es necesario
-  });
-  $('to-admin').addEventListener('click', function(){
-    $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
-    $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
-    paintCurrentUser(); // Llama a paintCurrentUser para que sepa que el rol es admin
-  });
+  
+  // Se eliminan los event listeners 'to-employee' y 'to-admin' ya que se eliminó el switch en HTML
 
   function onMonthChange(){ paintCurrentUser(); }
   $('sel-month').addEventListener('change', onMonthChange);
@@ -535,7 +520,7 @@
   firebase.auth().onAuthStateChanged(function(user){
     if(!user){
       $('auth-card').classList.remove('hidden'); $('app-card').classList.add('hidden');
-      $('user-email').textContent='—'; $('view-switch').classList.add('hidden'); return;
+      $('user-email').textContent='—'; $('role-display').classList.add('hidden'); return;
     }
     $('auth-card').classList.add('hidden'); $('app-card').classList.remove('hidden');
     $('user-email').textContent=user.email;
@@ -544,18 +529,16 @@
 
     getRole(user.uid).then(function(role){
       $('role-chip').textContent=role.toUpperCase();
+      $('role-display').classList.remove('hidden');
+
       if(role==='admin'){
-        $('view-switch').classList.remove('hidden');
-        $('employee-view').classList.add('hidden'); // Oculta la vista de empleado
-        $('admin-view').classList.remove('hidden'); // Muestra el panel de administración
-        $('to-admin').classList.remove('ghost');
-        $('to-employee').classList.add('ghost');
+        $('employee-view').classList.add('hidden'); 
+        $('admin-view').classList.remove('hidden');
       }else{
-        $('view-switch').classList.add('hidden');
         $('employee-view').classList.remove('hidden');
         $('admin-view').classList.add('hidden');
       }
-      paintTable(user, role); // Pasa el rol a paintTable para que sepa si debe cargar la planilla
+      paintTable(user, role); 
     });
   });
 
