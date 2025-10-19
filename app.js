@@ -208,12 +208,24 @@
     var st=rowState(ds);
     var tipo=null, hr="", com=(($('cm-'+ds)&&$('cm-'+ds).value)||"").trim();
     var cmEx=(($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"").trim();
-    if(st.ok && st.ex){ var h=habitual; if(variable){ var v=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v) h=v; } hr=h+" + "+(st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim()); tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
-    else if(st.ok){ var h2=habitual; if(variable){ var v2=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v2) h2=v2; } hr=h2; tipo='HABITUAL'; }
+    
+    // Si es horario variable, la hora reportada debe tomar el valor del input
+    if (variable && st.ok) {
+        var v = ($('var-'+ds)&&$('var-'+ds).value||'').trim();
+        if (v) habitual = v;
+    }
+    
+    if(st.ok && st.ex){ var h=habitual; hr=h+" + "+(st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim()); tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
+    else if(st.ok){ var h2=habitual; hr=h2; tipo='HABITUAL'; }
     else if(st.ab){ tipo='FALTA'; hr=""; }
     else if(st.ex){ hr=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim(); tipo='EXTRA'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
+    
     var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
+    
+    // Si no hay tipo (botón seleccionado) ni comentario, eliminar el registro
     if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
+    
+    // Si hay datos, guardar
     return getConfig(user.uid).then(function(cfg){
       return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
         .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
@@ -239,9 +251,12 @@
         var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
         (function(ds,info){
           var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
+          
+          // Manejadores de eventos para botones
           if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
+          
           applyStateToUI(ds,info.text,info.variable);
           
           if(existing[ds]){
@@ -255,19 +270,23 @@
           }
           
           // **********************************************
-          // ** CORRECCIÓN DE PERSISTENCIA (BLUR EVENTS) **
+          // ** PERSISTENCIA DE INPUTS (BLUR EVENTS) **
           // **********************************************
+          
+          // 1. Campo de Comentario Principal
           var cmInput=$('cm-'+ds); 
-          // Evento de Guardado para Comentario (al salir del campo)
           if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
           
-          // Evento de Guardado para Horario Variable (si aplica)
+          // 2. Campo de Horario Variable (si aplica)
           var varInput = $('var-'+ds);
           if (varInput) varInput.addEventListener('blur', function(){ 
-              applyStateToUI(ds, info.text, info.variable); // Vuelve a calcular las horas
+              // Se actualiza el estado de la UI y luego se persiste el nuevo valor de horario
+              applyStateToUI(ds, info.text, info.variable); 
               persistState(user,ds,key,info.text,info.variable); 
           });
 
+
+          // 3. Persistencia de Extras (Manteniendo la lógica original)
           var rmEx=$('rmEx-'+ds);
           var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
           function autosaveExtra(){ 
@@ -275,7 +294,7 @@
               var val=(exInput&&exInput.value||'').trim(); 
               if(val){ 
                   st.ex=true; 
-                  st.ok=true; 
+                  st.ok=true; // Asumir OK si hay extra con horario
                   st.ab=false; 
                   st.extraHours=val; 
                   setRowState(ds,st); 
