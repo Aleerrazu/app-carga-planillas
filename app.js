@@ -408,7 +408,7 @@
             });
         });
     } else if (role === 'admin') {
-        // Asegura que la vista de empleado esté oculta y la de admin esté visible
+        // Si es admin, solo se asegura de que la vista de empleado esté oculta y la de admin esté visible
         $('employee-view').classList.add('hidden');
         $('admin-view').classList.remove('hidden');
     }
@@ -443,10 +443,63 @@
     });
   }
   
-  function persistAllRows(user) { /* ... (Logic defined before) ... */ }
-  // La lógica completa de persistAllRows está en el código final, 
-  // pero se omite aquí por brevedad, asumiendo que ya tienes la versión anterior.
-  
+  function persistAllRows(user) {
+    const key = currentYM();
+    const rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
+    const savePromises = [];
+    
+    const saveBtn = $('save-all');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Guardando...';
+
+    rows.forEach(tr => {
+      if (tr.id.startsWith('row-')) {
+        const ds = tr.id.replace('row-', '');
+        
+        const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
+        const cfgPromise = getConfig(user.uid);
+        
+        // **************** CRITICAL FIX: FORZAR ESTADO DEL BOTÓN DESDE EL DOM ****************
+        const ok = $('ok-'+ds);
+        const ab = $('ab-'+ds);
+        const exb = $('exbtn-'+ds);
+        
+        if (ok || ab || exb) {
+            const st = rowState(ds);
+            st.ok = ok.classList.contains('active');
+            st.ab = ab.classList.contains('active');
+            st.ex = exb.classList.contains('active');
+            setRowState(ds, st);
+        }
+        
+        savePromises.push(cfgPromise.then(cfg => {
+          const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
+          
+          return persistState(user, ds, key, info.text, info.variable);
+        }));
+      }
+    });
+
+    return Promise.all(savePromises)
+      .then(() => {
+        const msg = $('emp-msg');
+        if (msg) setMsg(msg, 'Cambios guardados correctamente.', true);
+      })
+      .catch(error => {
+        console.error('Error al guardar todos los cambios:', error);
+        const msg = $('emp-msg');
+        if (msg) setMsg(msg, 'Error al grabar cambios. Revisa la consola.', false);
+      })
+      .finally(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Grabar cambios';
+        setTimeout(() => { 
+            const msg = $('emp-msg'); 
+            if (msg) msg.textContent = ''; 
+        }, 3000);
+      });
+  }
+
   function paintCurrentUser(){ 
       var u=firebase.auth().currentUser; 
       if(!u) return;
@@ -524,8 +577,6 @@
     }
     $('auth-card').classList.add('hidden'); $('app-card').classList.remove('hidden');
     $('user-email').textContent=user.email;
-
-    buildMonthSelectors();
 
     getRole(user.uid).then(function(role){
       $('role-chip').textContent=role.toUpperCase();
