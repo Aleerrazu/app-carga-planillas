@@ -275,7 +275,7 @@
         const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
         const cfgPromise = getConfig(user.uid);
         
-        // Forzar la actualización del estado de los botones (necesario para el guardado masivo)
+        // **************** CRITICAL FIX: FORZAR ESTADO DEL BOTÓN DESDE EL DOM ****************
         const ok = $('ok-'+ds);
         const ab = $('ab-'+ds);
         const exb = $('exbtn-'+ds);
@@ -291,7 +291,6 @@
         savePromises.push(cfgPromise.then(cfg => {
           const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
           
-          // persistState ahora sincronizará el resto de inputs antes de guardar.
           return persistState(user, ds, key, info.text, info.variable);
         }));
       }
@@ -338,10 +337,11 @@
         (function(ds,info){
           var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
           
-          // Manejadores de eventos para botones
+          // **************** CRITICAL FIX: MANEJADORES DE BOTONES PARA PERSISTENCIA ****************
+          // Después de cambiar el estado, actualiza la UI y persiste inmediatamente
           if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
+          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
           
           applyStateToUI(ds,info.text,info.variable);
           
