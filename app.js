@@ -225,7 +225,7 @@
     // Se asegura que el estado interno refleje lo que el usuario escribió ANTES de la lógica
     st.comment = ($('cm-'+ds)&&$('cm-'+ds).value)||"";
     st.cmExtra = ($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"";
-    st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||""; // Captura el valor del input de extra
+    st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||""; 
     setRowState(ds, st); // Actualizar el estado para los cálculos
 
     var tipo=null, hr="", com=st.comment, cmEx=st.cmExtra;
@@ -254,7 +254,7 @@
   }
   
   // **********************************************
-  // ** FUNCIÓN DE GUARDADO MANUAL **
+  // ** FUNCIÓN DE GUARDADO MANUAL (MASIVO) **
   // **********************************************
   function persistAllRows(user) {
     const key = currentYM();
@@ -275,12 +275,23 @@
         const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
         const cfgPromise = getConfig(user.uid);
         
+        // Forzar la actualización del estado de los botones (necesario para el guardado masivo)
+        const ok = $('ok-'+ds);
+        const ab = $('ab-'+ds);
+        const exb = $('exbtn-'+ds);
+        
+        if (ok || ab || exb) {
+            const st = rowState(ds);
+            st.ok = ok.classList.contains('active');
+            st.ab = ab.classList.contains('active');
+            st.ex = exb.classList.contains('active');
+            setRowState(ds, st);
+        }
+        
         savePromises.push(cfgPromise.then(cfg => {
           const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
           
-          // FORZAR SINCRONIZACIÓN DE ESTADO DE INPUTS
-          // Esto se hace dentro de persistState, solo necesitamos llamarlo.
-          
+          // persistState ahora sincronizará el resto de inputs antes de guardar.
           return persistState(user, ds, key, info.text, info.variable);
         }));
       }
