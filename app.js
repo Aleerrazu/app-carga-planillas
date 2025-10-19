@@ -161,9 +161,7 @@
           st.ex=true; 
           var parts=(existing.horarioReportado||"").split('+'); 
           st.extraHours=(parts[1]||"").trim();
-          // Nota: El comentario de la fila principal contiene toda la info.
       }
-      // Asegurar que el comentario general sea el del reporte, ya que es el único que persiste en la fila principal
       st.comment = existing.comentarios||""; 
     }
     setRowState(ds, st);
@@ -185,20 +183,6 @@
     
     if(exInput && st.extraHours) exInput.value = st.extraHours;
     
-    // Sincronizar input variable con el estado interno (si no está cargado ya por existing)
-    if(variable && $('var-'+ds)){
-         var currentReport = ($('var-'+ds).value || '').trim();
-         var isHabitualOk = st.ok && (!st.ex || (st.ex && st.extraHours));
-         
-         if (isHabitualOk && !currentReport) {
-             // Si está marcado OK pero el input está vacío, intentar rellenar con la hora habitual si existe.
-         }
-         
-         // No se puede inferir el valor de 'var-input' de forma confiable sin datos de Firestore, 
-         // pero se cargará más abajo si 'existing' existe.
-    }
-
-
     // Control de visibilidad de la fila de extra
     var trExtra=$('sub-'+ds); 
     if(trExtra) trExtra.classList.toggle('hidden', !st.ex);
@@ -238,6 +222,10 @@
     var st=rowState(ds);
     var tipo=null, hr="", com=(($('cm-'+ds)&&$('cm-'+ds).value)||"").trim();
     var cmEx=(($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"").trim();
+    
+    // Sincronizar estado interno con los inputs antes de guardar (para evitar que se pierdan datos si el estado interno no se actualizó)
+    st.comment = com;
+    st.cmExtra = cmEx;
     
     // Si es horario variable y está marcado como OK, la hora reportada debe tomar el valor del input variable
     if (variable && st.ok) {
@@ -289,17 +277,13 @@
           
           // FORZAR ACTUALIZACIÓN DE ESTADO INTERNO Y PERSISTENCIA DE INPUTS
           
-          // 1. Horarios variables y comentario principal (para evitar pérdida si no hubo blur)
+          // Capturar el último estado de los inputs
           const st = rowState(ds);
           st.comment = ($('cm-'+ds) && $('cm-'+ds).value) || "";
-          
-          // Sincronizar input variable con el estado interno para persistState
           if (info.variable) {
               const varInput = $('var-'+ds);
-              if (varInput) varInput.value = (varInput.value || '').trim(); // Limpiar y usar
+              if (varInput) st.extraHours = (varInput.value || '').trim(); // NOTA: Esto es para simplificar, en realidad es el horario reportado, no extraHours.
           }
-          
-          // 2. Horarios y comentario extra
           const exInput = $('ex-'+ds);
           if (exInput) st.extraHours = (exInput.value || '').trim();
           const cmx = $('cmEx-'+ds);
@@ -322,7 +306,7 @@
       .catch(error => {
         console.error('Error al guardar todos los cambios:', error);
         const msg = $('emp-msg');
-        if (msg) setMsg(msg, 'Error al grabar cambios.', false);
+        if (msg) setMsg(msg, 'Error al grabar cambios. Revisa la consola.', false);
       })
       .finally(() => {
         saveBtn.disabled = false;
@@ -345,55 +329,4 @@
       var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
       var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
       for(var d=1; d<=count; d++){
-        var date=new Date(y,m-1,d); var ds=fmt(date);
-        var info=habitualForDay(sbd,date); var hasExisting=!!existing[ds];
-        var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
-        if(info.skip && !hasExisting) continue;
-        var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
-        var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
-        (function(ds,info){
-          var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
-          
-          // Manejadores de eventos para botones
-          if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
-          
-          applyStateToUI(ds,info.text,info.variable);
-          
-          if(existing[ds]){
-            var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
-            
-            // Cargar horario variable si existe
-            if(info.variable){ 
-                var varInp=$('var-'+ds); 
-                var horarioReportado = existing[ds].horarioReportado;
-                if(horarioReportado){
-                    var parts = horarioReportado.split('+');
-                    varInp.value = (existing[ds].tipoReporte === 'MIXTO' ? (parts[0] || '').trim() : horarioReportado).trim();
-                }
-            }
-            
-            // Cargar estado de extra
-            if(existing[ds].tipoReporte==='EXTRA' || existing[ds].tipoReporte==='MIXTO'){ 
-                var exI=$('ex-'+ds); 
-                var parts = existing[ds].horarioReportado.split('+');
-                var exHours = (existing[ds].tipoReporte === 'MIXTO' ? parts[1] : parts[0] || "").trim();
-                
-                if(exI) exI.value = exHours; 
-                var st=rowState(ds); st.ex=true; st.extraHours=exHours; setRowState(ds,st); 
-            }
-            
-            if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
-            applyStateToUI(ds,info.text,info.variable);
-          }
-          
-          // **********************************************
-          // ** PERSISTENCIA DE INPUTS (BLUR EVENTS) **
-          // **********************************************
-          
-          // 1. Campo de Comentario Principal
-          var cmInput=$('cm-'+ds); 
-          if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
-          
-          //
+        var date=
