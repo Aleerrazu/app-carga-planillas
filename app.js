@@ -209,7 +209,7 @@
     var tipo=null, hr="", com=(($('cm-'+ds)&&$('cm-'+ds).value)||"").trim();
     var cmEx=(($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"").trim();
     
-    // Si es horario variable, la hora reportada debe tomar el valor del input
+    // Si es horario variable y está marcado como OK, la hora reportada debe tomar el valor del input variable
     if (variable && st.ok) {
         var v = ($('var-'+ds)&&$('var-'+ds).value||'').trim();
         if (v) habitual = v;
@@ -230,6 +230,49 @@
       return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
         .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
     });
+  }
+  
+  // **********************************************
+  // ** NUEVA FUNCIÓN DE GUARDADO MANUAL **
+  // **********************************************
+  function persistAllRows(user) {
+    const key = currentYM();
+    const rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
+    const savePromises = [];
+    
+    // Iterar sobre las filas principales (omitir las sub-filas)
+    rows.forEach(tr => {
+      if (tr.id.startsWith('row-')) {
+        const ds = tr.id.replace('row-', '');
+        
+        // Simular la obtención del habitual/variable para el persistState
+        const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
+        const cfgPromise = getConfig(user.uid);
+        
+        savePromises.push(cfgPromise.then(cfg => {
+          const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
+          
+          // Forzar la actualización de la UI para capturar el último estado de los inputs
+          applyStateToUI(ds, info.text, info.variable); 
+          
+          return persistState(user, ds, key, info.text, info.variable);
+        }));
+      }
+    });
+
+    // Manejar el resultado de todas las promesas
+    return Promise.all(savePromises)
+      .then(() => {
+        const msg = $('emp-msg');
+        if (msg) setMsg(msg, 'Cambios guardados correctamente.', true);
+        setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
+      })
+      .catch(error => {
+        console.error('Error al guardar todos los cambios:', error);
+        const msg = $('emp-msg');
+        if (msg) setMsg(msg, 'Error al grabar cambios.', false);
+        setTimeout(() => { if (msg) msg.textContent = ''; }, 5000);
+      });
   }
 
   function paintTable(user){
@@ -262,8 +305,18 @@
           if(existing[ds]){
             var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
             
+            if(info.variable){ var varInp=$('var-'+ds); if(varInp) varInp.value=existing[ds].horarioReportado||""; }
+            
             if(existing[ds].tipoReporte==='EXTRA'){ var exI=$('ex-'+ds); if(exI) exI.value=existing[ds].horarioReportado||""; var st=rowState(ds); st.ex=true; st.extraHours=existing[ds].horarioReportado||""; setRowState(ds,st); }
-            if(existing[ds].tipoReporte==='MIXTO'){ var parts=(existing[ds].horarioReportado||"").split('+'); var exP=(parts[1]||"").trim(); var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); }
+            if(existing[ds].tipoReporte==='MIXTO'){ 
+                var parts=(existing[ds].horarioReportado||"").split('+'); 
+                var exP=(parts[1]||"").trim(); 
+                var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; 
+                var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); 
+                
+                // Si es MIXTO y variable, el horario habitual es el primer reporte
+                if (info.variable) { var varInp = $('var-'+ds); if(varInp) varInp.value=(parts[0]||"").trim(); }
+            }
             
             if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
             applyStateToUI(ds,info.text,info.variable);
@@ -294,7 +347,6 @@
               var val=(exInput&&exInput.value||'').trim(); 
               if(val){ 
                   st.ex=true; 
-                  st.ok=true; // Asumir OK si hay extra con horario
                   st.ab=false; 
                   st.extraHours=val; 
                   setRowState(ds,st); 
@@ -309,6 +361,11 @@
       }
       $('submit-month').disabled = lock.locked;
       $('reset-month').disabled = lock.locked;
+      
+      // Manejador del botón Guardar Cambios
+      $('save-all').addEventListener('click', function(){
+        if(user) persistAllRows(user);
+      });
     });
   }
 
