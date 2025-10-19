@@ -97,46 +97,48 @@
       td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); 
     }
     
-    // TD4 (ACCIONES) - SE CREA AQUÍ
-    var td4=document.createElement('td'); 
-    td4.className='icon-row';
+    // TD3 se convierte en ACCIONES
+    var td3_actions=document.createElement('td'); 
+    td3_actions.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
     var ab=document.createElement('button'); ab.id='ab-'+ds; ab.className='icon bad'; ab.textContent='✕'; if(locked||isOffExtraOnly) ab.disabled=true;
     var ex=document.createElement('button'); ex.id='exbtn-'+ds; ex.className='icon blue'; ex.textContent='＋'; if(locked) ex.disabled=true;
-    td4.appendChild(ok); td4.appendChild(ab); td4.appendChild(ex);
+    td3_actions.appendChild(ok); td3_actions.appendChild(ab); td3_actions.appendChild(ex);
 
     if(isOffExtraOnly){
       var del=document.createElement('button'); del.className='trash'; del.title='Borrar este extra'; del.textContent='🗑';
-      td4.appendChild(del);
+      td3_actions.appendChild(del);
       del.addEventListener('click', function(){
         var u=firebase.auth().currentUser; if(!u) return;
         firebase.firestore().collection('timesheets').doc(u.uid+'_'+ds).delete().then(function(){ paintCurrentUser(); });
       });
     }
 
-    var td3=document.createElement('td'); // HS TRABAJADAS - SE CREA AQUÍ
-    td3.id='hrs-'+ds; 
-    td3.className='stack muted'; 
-    td3.innerHTML='<span class="tag">—</span>';
+    // TD4 se convierte en HS TRABAJADAS
+    var td4_hrs=document.createElement('td'); 
+    td4_hrs.id='hrs-'+ds; 
+    td4_hrs.className='stack muted'; 
+    td4_hrs.innerHTML='<span class="tag">—</span>';
 
     var td5=document.createElement('td'); // COMENTARIO
     var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
     td5.appendChild(cm);
 
-    // SE AÑADEN EN EL NUEVO ORDEN: TD1, TD2, TD4, TD3, TD5
+    // SE AÑADEN EN EL NUEVO ORDEN: TD1, TD2, TD3(ACTIONS), TD4(HRS), TD5
     tr.appendChild(td1); 
     tr.appendChild(td2); 
-    tr.appendChild(td4); 
-    tr.appendChild(td3); 
+    tr.appendChild(td3_actions); 
+    tr.appendChild(td4_hrs); 
     tr.appendChild(td5);
 
+    // Subfila para EXTRA, ajustando el orden de sus celdas para que coincida con la principal
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
     sub.innerHTML= ''
-      + '<td>Extra</td>'
-      + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'
-      + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>'
-      + '<td id="hrsEx-'+ds+'" class="muted">—</td>' // Intercambiado para que coincida con la HS TRABAJADAS
-      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>';
+      + '<td>Extra</td>' // DÍA
+      + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>' // HORARIO HABITUAL
+      + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>' // ACCIONES (Botón Quitar)
+      + '<td id="hrsEx-'+ds+'" class="muted">—</td>' // HS TRABAJADAS
+      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>'; // COMENTARIO (Extra)
 
     if(locked){ 
       var rm = sub.querySelector('#rmEx-'+ds); if(rm) rm.disabled=true; 
@@ -197,7 +199,7 @@
       if(hrsEx) hrsEx.textContent='—';
     }
     if(!pusoAlgo){
-      var dash=document.createElement('span'); dash.textContent='—'; hrsMain.appendChild(dash);
+      var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
     }
   }
 
@@ -419,5 +421,3 @@
     })();
   };
 })();
-
-// vfix-2025.10.18-220505-single-row-clean-final
