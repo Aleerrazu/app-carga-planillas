@@ -1,6 +1,4 @@
 (function(){
-  try { document.getElementById('version-chip').textContent = window.__APP_VERSION || document.getElementById('version-chip').textContent; } catch(e){}
-
   var firebaseConfig = {
     apiKey: "AIzaSyBSPrLiI-qTIEmAfQ5UCtWllHKaTX-VH5Q",
     authDomain: "controlhorarioapp-6a9c7.firebaseapp.com",
@@ -14,7 +12,7 @@
   function $(id){ return document.getElementById(id); }
   function fmt(d){ return d.toISOString().split('T')[0]; }
   function ym(d){ return d.toISOString().slice(0,7); }
-  function ymFromParts(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+  function ymFrom(y,m){ return y+'-'+String(m).padStart(2,'0'); }
   function wkey(d){ return ['sun','mon','tue','wed','thu','fri','sat'][d.getDay()]; }
   function wname(d){ return d.toLocaleDateString('es-AR',{weekday:'long'}); }
   function parseHM(s){
@@ -22,508 +20,335 @@
     var m = s.match(/^\s*(\d{1,2})\s*:?(\d{2})?\s*-\s*(\d{1,2})\s*:?(\d{2})?\s*$/);
     if(!m) return null;
     var h1=+m[1], m1=+(m[2]||0), h2=+m[3], m2=+(m[4]||0);
-    var start=h1*60+m1, end=h2*60+m2;
-    var diff = end>=start? end-start : (24*60-start+end);
-    return {hours:(diff/60).toFixed(2), start:String(h1).padStart(2,'0')+':'+String(m1).padStart(2,'0'), end:String(h2).padStart(2,'0')+':'+String(m2).padStart(2,'0')};
+    var start=h1*60+m1, end=h2*60+m2, diff=end>=start? end-start : (24*60-start+end);
+    return {hours:(diff/60).toFixed(2), start:(h1+'').padStart(2,'0')+':'+(m1+'').padStart(2,'0'), end:(h2+'').padStart(2,'0')+':'+(m2+'').padStart(2,'0')};
   }
-  function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
+  function chipHours(h){ var s=document.createElement('span'); s.className='tag'; s.textContent=h; return s; }
 
-  function getRole(uid){
-    return firebase.firestore().collection('roles').doc(uid).get().then(function(r){
-      return (r.exists && r.data() && r.data().role==='admin') ? 'admin' : 'employee';
-    }).catch(function(){ return 'employee'; });
-  }
   function getConfig(uid){
     return firebase.firestore().collection('employee_config').where('userId','==',uid).limit(1).get()
-      .then(function(q){ if(q.empty) return null; var d=q.docs[0]; var o=d.data(); o.id=d.id; return o; });
+      .then(q => q.empty ? null : Object.assign({id:q.docs[0].id}, q.docs[0].data()));
   }
   function getLock(uid, key){
     return firebase.firestore().collection('locks').doc(uid+'_'+key).get()
-      .then(function(d){ return d.exists ? d.data() : {locked:false,lastSubmitted:null}; });
+      .then(d => d.exists ? d.data() : {locked:false,lastSubmitted:null});
   }
-  function setLock(uid, key, locked){
-    return firebase.firestore().collection('locks').doc(uid+'_'+key).set(
-      {locked:locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null},
-      {merge:true}
-    );
+  function setLock(uid,key,locked){
+    return firebase.firestore().collection('locks').doc(uid+'_'+key)
+      .set({locked, lastSubmitted: locked? firebase.firestore.FieldValue.serverTimestamp(): null},{merge:true});
   }
-  function monthReports(uid, key){
+  function monthReports(uid,key){
     return firebase.firestore().collection('timesheets')
       .where('userId','==',uid).where('mesAnio','==',key).get()
-      .then(function(s){ var map={}; s.forEach(function(x){ map[x.data().fecha]=x.data(); }); return map; });
+      .then(s=>{const m={}; s.forEach(x=>m[x.data().fecha]=x.data()); return m;});
   }
-  function getOneReport(uid, dateStr){
-    return firebase.firestore().collection('timesheets').doc(uid+'_'+dateStr).get()
-      .then(function(d){ return d.exists ? d.data() : null; });
-  }
+  function getOne(uid,ds){ return firebase.firestore().collection('timesheets').doc(uid+'_'+ds).get().then(d=>d.exists?d.data():null); }
 
   function buildMonthSelectors(){
     var now=new Date(), y=now.getFullYear();
-    var selM=$('sel-month'), selY=$('sel-year');
-    var months=['01','02','03','04','05','06','07','08','09','10','11','12'];
-    var names=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    selM.innerHTML=''; selY.innerHTML='';
-    for(var i=0;i<12;i++){ var opt=document.createElement('option'); opt.value=months[i]; opt.textContent=names[i].charAt(0).toUpperCase()+names[i].slice(1); selM.appendChild(opt); }
-    for(var k=y-2;k<=y+2;k++){ var oy=document.createElement('option'); oy.value=String(k); oy.textContent=String(k); selY.appendChild(oy); }
-    var ymNow = ym(now).split('-'); selM.value=ymNow[1]; selY.value=ymNow[0];
+    var mSel=$('sel-month'), ySel=$('sel-year');
+    var mNames=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    mSel.innerHTML=''; ySel.innerHTML='';
+    for (var i=0;i<12;i++){ var o=document.createElement('option'); o.value=String(i+1).padStart(2,'0'); o.textContent=mNames[i][0].toUpperCase()+mNames[i].slice(1); mSel.appendChild(o); }
+    for (var k=y-2;k<=y+2;k++){ var oy=document.createElement('option'); oy.value=String(k); oy.textContent=String(k); ySel.appendChild(oy); }
+    var ymNow=ym(now).split('-'); mSel.value=ymNow[1]; ySel.value=ymNow[0];
   }
-  function currentYM(){ return ymFromParts($('sel-year').value, $('sel-month').value); }
+  function currentYM(){ return ymFrom($('sel-year').value, $('sel-month').value); }
 
   function habitualForDay(sbd, d){
-    var o = (sbd && sbd[wkey(d)]) || {};
+    var o=(sbd&&sbd[wkey(d)])||{};
     if(o.off) return {text:null, variable:false, skip:true};
     if(o.variable) return {text:"", variable:true, skip:false};
     if(!o.start || !o.end) return {text:"", variable:false, skip:false};
     return {text:o.start+"-"+o.end, variable:false, skip:false};
   }
+
   function rowState(ds){ var r=$('row-'+ds); return r? JSON.parse(r.getAttribute('data-state')||'{}') : {}; }
   function setRowState(ds, st){ var r=$('row-'+ds); if(r) r.setAttribute('data-state', JSON.stringify(st)); }
 
   function buildRow(ds, dateObj, habitual, variable, locked, existing, isOffExtraOnly){
     var tr=document.createElement('tr'); tr.id='row-'+ds;
 
-    var td1=document.createElement('td'); // DÍA
-    var b=document.createElement('b'); b.textContent=wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7); 
-    td1.appendChild(b);
+    var td1=document.createElement('td'); td1.innerHTML='<b>'+wname(dateObj)+' '+ds.slice(8,10)+'/'+ds.slice(5,7)+'</b>';
 
-    var td2=document.createElement('td'); // HORARIO HABITUAL
-    if(variable){ 
-      var inp=document.createElement('input'); 
-      inp.id='var-'+ds; 
-      inp.placeholder='HH:MM-HH:MM'; 
-      if(locked) inp.disabled=true; 
-      td2.appendChild(inp); 
-    } else { 
-      td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—'); 
+    var td2=document.createElement('td');
+    if (variable){
+      var inp=document.createElement('input'); inp.id='var-'+ds; inp.placeholder='HH:MM-HH:MM'; if(locked) inp.disabled=true; td2.appendChild(inp);
+    }else{
+      td2.textContent = habitual || (isOffExtraOnly? '— (No habitual)':'—');
     }
-    
-    // TD3 se convierte en ACCIONES
-    var td3_actions=document.createElement('td'); 
-    td3_actions.className='icon-row';
+
+    var td3=document.createElement('td'); td3.id='hrs-'+ds; td3.className='stack muted'; td3.appendChild(chipHours('—'));
+
+    var td4=document.createElement('td'); td4.className='icon-row';
     var ok=document.createElement('button'); ok.id='ok-'+ds; ok.className='icon good'; ok.textContent='✓'; if(locked||isOffExtraOnly) ok.disabled=true;
     var ab=document.createElement('button'); ab.id='ab-'+ds; ab.className='icon bad'; ab.textContent='✕'; if(locked||isOffExtraOnly) ab.disabled=true;
     var ex=document.createElement('button'); ex.id='exbtn-'+ds; ex.className='icon blue'; ex.textContent='＋'; if(locked) ex.disabled=true;
-    td3_actions.appendChild(ok); td3_actions.appendChild(ab); td3_actions.appendChild(ex);
+    td4.append(ok,ab,ex);
 
     if(isOffExtraOnly){
-      var del=document.createElement('button'); del.className='trash'; del.title='Borrar este extra'; del.textContent='🗑';
-      td3_actions.appendChild(del);
-      del.addEventListener('click', function(){
-        var u=firebase.auth().currentUser; if(!u) return;
-        firebase.firestore().collection('timesheets').doc(u.uid+'_'+ds).delete().then(function(){ paintCurrentUser(); });
-      });
+      var del=document.createElement('button'); del.className='icon'; del.textContent='🗑'; td4.appendChild(del);
+      del.addEventListener('click', ()=>{ var u=firebase.auth().currentUser; if(!u) return;
+        firebase.firestore().collection('timesheets').doc(u.uid+'_'+ds).delete().then(paintCurrentUser); });
     }
-    
-    // TD4 se convierte en COMENTARIO
-    var td4_comment=document.createElement('td'); 
-    var cm=document.createElement('input'); cm.id='cm-'+ds; cm.placeholder='Comentario...'; 
-    td4_comment.appendChild(cm);
 
-    // TD5 se convierte en HS TRABAJADAS (Final)
-    var td5_hrs=document.createElement('td'); 
-    td5_hrs.id='hrs-'+ds; 
-    td5_hrs.className='stack muted'; 
-    td5_hrs.innerHTML='<span class="tag">—</span>';
+    tr.append(td1,td2,td3,td4);
 
-    // SE AÑADEN EN EL NUEVO ORDEN: TD1, TD2, TD3(ACTIONS), TD4(COMMENT), TD5(HRS)
-    tr.appendChild(td1); 
-    tr.appendChild(td2); 
-    tr.appendChild(td3_actions); 
-    tr.appendChild(td4_comment); 
-    tr.appendChild(td5_hrs);
-
-    // Subfila para EXTRA, ajustando el orden de sus celdas para que coincida con la principal
+    // Subfila Extra (4 columnas)
     var sub=document.createElement('tr'); sub.id='sub-'+ds; sub.className='subrow hidden';
-    sub.innerHTML= ''
-      + '<td>Extra</td>' // DÍA
-      + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>' // HORARIO HABITUAL
-      + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>' // ACCIONES (Botón Quitar)
-      + '<td><input id="cmEx-'+ds+'" placeholder="Comentario (extra)..."></td>' // COMENTARIO (Extra)
-      + '<td id="hrsEx-'+ds+'" class="muted">—</td>'; // HS TRABAJADAS (Extra)
+    sub.innerHTML = '<td>Extra</td>'
+      + '<td><input id="ex-'+ds+'" placeholder="HH:MM-HH:MM"></td>'
+      + '<td id="hrsEx-'+ds" class="muted">—</td>'
+      + '<td class="icon-row"><button class="btn small ghost" id="rmEx-'+ds+'">Quitar</button></td>';
+    if(locked){ sub.querySelector('#rmEx-'+ds).disabled=true; sub.querySelector('#ex-'+ds).disabled=true; }
 
-    if(locked){ 
-      var rm = sub.querySelector('#rmEx-'+ds); if(rm) rm.disabled=true; 
-      var exInp = sub.querySelector('#ex-'+ds); if(exInp) exInp.disabled=true;
-      var cmEx = sub.querySelector('#cmEx-'+ds); if(cmEx) cmEx.disabled=true;
-    }
-
-    var st={ok:false,ab:false,ex:false,extraHours:"",comment:(existing&&existing.comentarios)||"",cmExtra:""};
+    var st={ok:false,ab:false,ex:false,extraHours:"",comment:(existing&&existing.comentarios)||""};
     if(existing){
       if(existing.tipoReporte==='HABITUAL') st.ok=true;
       if(existing.tipoReporte==='FALTA') st.ab=true;
-      if(existing.tipoReporte==='EXTRA'){ st.ex=true; st.extraHours=existing.horarioReportado||""; st.cmExtra=existing.comentarios||""; }
-      if(existing.tipoReporte==='MIXTO'){ st.ok=true; st.ex=true; var parts=(existing.horarioReportado||"").split('+'); st.extraHours=(parts[1]||"").trim(); }
+      if(existing.tipoReporte==='EXTRA'){ st.ex=true; st.extraHours=existing.horarioReportado||""; sub.classList.remove('hidden'); }
+      if(existing.tipoReporte==='MIXTO'){ st.ok=true; st.ex=true; var parts=(existing.horarioReportado||"").split('+'); st.extraHours=(parts[1]||"").trim(); sub.classList.remove('hidden'); }
     }
-    setRowState(ds, st);
-    return [tr, sub];
+    setRowState(ds,st);
+    return [tr,sub];
   }
 
   function applyStateToUI(ds, habitual, variable){
     var st=rowState(ds);
-    var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds), exInput=$('ex-'+ds);
-    var hrsEx = document.getElementById('hrsEx-'+ds) || null;
+    ['ok-','ab-','exbtn-'].forEach(p=>{ var b=$(p+ds); if(!b) return; b.classList.toggle('active', !!st[p==='ok-'?'ok':p==='ab-'?'ab':'ex']); });
+    var hrsMain=$('hrs-'+ds); if(!hrsMain) return; hrsMain.innerHTML='';
 
-    if(ok) ok.classList.toggle('active', !!st.ok);
-    if(ab) ab.classList.toggle('active', !!st.ab);
-    if(exb) exb.classList.toggle('active', !!st.ex);
-    if(exInput && st.extraHours) exInput.value = st.extraHours;
-    if($('cmEx-'+ds) && st.cmExtra) $('cmEx-'+ds).value = st.cmExtra;
+    if(st.ab){ hrsMain.appendChild(chipHours('0 h')); var hex=$('hrsEx-'+ds); if(hex) hex.textContent='—'; return; }
 
-    // Control de visibilidad de la fila de extra
-    var trExtra=$('sub-'+ds); 
-    if(trExtra) trExtra.classList.toggle('hidden', !st.ex);
-    
-    var hrsMain=$('hrs-'+ds); if(!hrsMain) return;
-    hrsMain.innerHTML='';
-    if(st.ab){
-      var chip0=document.createElement('span'); chip0.className='tag'; chip0.textContent='0 h'; hrsMain.appendChild(chip0);
-      if(hrsEx) hrsEx.textContent='—';
-      return;
-    }
-    var pusoAlgo=false;
+    var added=false;
     if(st.ok){
-      var h=habitual;
-      if(variable){ var v=($('var-'+ds)&&$('var-'+ds).value||'').trim(); if(v) h=v; }
-      var p=parseHM(h);
-      var chip=document.createElement('span'); chip.className='tag'; chip.textContent = p? (p.hours+' h'):'—';
-      hrsMain.appendChild(chip);
-      pusoAlgo=true;
+      var base=habitual; if(variable){ var v=($('var-'+ds)?.value||'').trim(); if(v) base=v; }
+      var p=parseHM(base); hrsMain.appendChild(chipHours(p? (p.hours+' h'):'—')); added=true;
     }
     if(st.ex){
-      var t=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||'').trim();
-      var p2=parseHM(t);
-      var chip2=document.createElement('span'); chip2.className='tag'; chip2.textContent = p2? (p2.hours+' h'):'—';
-      hrsMain.appendChild(chip2);
-      if(hrsEx) hrsEx.textContent = p2? (p2.hours+' h') : '—';
-      pusoAlgo=true;
-    }else{
-      if(hrsEx) hrsEx.textContent='—';
-    }
-    if(!pusoAlgo){
-      var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
-    }
+      var t=st.extraHours || (($('ex-'+ds)?.value)||'').trim(); var p2=parseHM(t);
+      hrsMain.appendChild(chipHours(p2? (p2.hours+' h'):'—')); added=true;
+      var hex=$('hrsEx-'+ds); if(hex) hex.textContent=p2? (p2.hours+' h'):'—';
+    }else{ var hex2=$('hrsEx-'+ds); if(hex2) hex2.textContent='—'; }
+
+    if(!added) hrsMain.appendChild(chipHours('—'));
   }
 
+  // Persistencia robusta: guarda ✓/✕/＋ aun sin horas
   function persistState(user, ds, key, habitual, variable){
-    var st=rowState(ds);
-    var tipo=null, hr="", com=(($('cm-'+ds)&&$('cm-'+ds).value)||"").trim();
-    var cmEx=(($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"").trim();
-    
-    // Si es horario variable y está marcado como OK, la hora reportada debe tomar el valor del input variable
-    if (variable && st.ok) {
-        var v = ($('var-'+ds)&&$('var-'+ds).value||'').trim();
-        if (v) habitual = v;
-    }
-    
-    if(st.ok && st.ex){ var h=habitual; hr=h+" + "+(st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim()); tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
-    else if(st.ok){ var h2=habitual; hr=h2; tipo='HABITUAL'; }
-    else if(st.ab){ tipo='FALTA'; hr=""; }
-    else if(st.ex){ hr=st.extraHours || (($('ex-'+ds)&&$('ex-'+ds).value)||"").trim(); tipo='EXTRA'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
-    
-    var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
-    
-    // Si no hay tipo (botón seleccionado) ni comentario, eliminar el registro
-    if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
-    
-    // Si hay datos, guardar
-    return getConfig(user.uid).then(function(cfg){
-      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
-        .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
-    });
-  }
-  
-  // **********************************************
-  // ** NUEVA FUNCIÓN DE GUARDADO MANUAL **
-  // **********************************************
-  function persistAllRows(user) {
-    const key = currentYM();
-    const rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
-    const savePromises = [];
-    
-    // Iterar sobre las filas principales (omitir las sub-filas)
-    rows.forEach(tr => {
-      if (tr.id.startsWith('row-')) {
-        const ds = tr.id.replace('row-', '');
-        
-        // Simular la obtención del habitual/variable para el persistState
-        const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
-        const cfgPromise = getConfig(user.uid);
-        
-        savePromises.push(cfgPromise.then(cfg => {
-          const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
-          
-          // Forzar la actualización de la UI para capturar el último estado de los inputs
-          applyStateToUI(ds, info.text, info.variable); 
-          
-          return persistState(user, ds, key, info.text, info.variable);
-        }));
-      }
-    });
+    const st = rowState(ds);
 
-    // Manejar el resultado de todas las promesas
-    return Promise.all(savePromises)
-      .then(() => {
-        const msg = $('emp-msg');
-        if (msg) setMsg(msg, 'Cambios guardados correctamente.', true);
-        setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
-      })
-      .catch(error => {
-        console.error('Error al guardar todos los cambios:', error);
-        const msg = $('emp-msg');
-        if (msg) setMsg(msg, 'Error al grabar cambios.', false);
-        setTimeout(() => { if (msg) msg.textContent = ''; }, 5000);
-      });
+    let tipo = null;
+    let hr   = "";
+    const com = st.comment || "";
+
+    if (st.ok && st.ex){
+      let base = habitual;
+      if (variable){
+        const v = (document.getElementById('var-'+ds)?.value || '').trim();
+        if (v) base = v;
+      }
+      const extra = st.extraHours || (document.getElementById('ex-'+ds)?.value || '').trim();
+      hr = (base || "") + " + " + extra;
+      tipo = "MIXTO";
+    } else if (st.ok){
+      tipo = "HABITUAL";
+      if (variable){
+        const v = (document.getElementById('var-'+ds)?.value || '').trim();
+        hr = v || habitual || "";
+      } else {
+        hr = habitual || "";
+      }
+    } else if (st.ab){
+      tipo = "FALTA";
+      hr = "";
+    } else if (st.ex){
+      tipo = "EXTRA";
+      hr = st.extraHours || (document.getElementById('ex-'+ds)?.value || '').trim();
+    }
+
+    const ref = firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
+
+    if (!tipo){
+      return ref.delete().catch(()=>{});
+    }
+
+    return getConfig(user.uid).then(cfg =>
+      ref.set({
+        userId: user.uid,
+        email: user.email,
+        nombre: (cfg && cfg.nombre) || '',
+        fecha: ds,
+        mesAnio: key,
+        tipoReporte: tipo,
+        horarioReportado: hr,
+        comentarios: com,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true })
+    );
+  }
+
+  function persistAllRows(user){
+    const key = currentYM();
+    document.querySelectorAll('tr[id^="row-"]').forEach(tr=>{
+      const ds = tr.id.replace('row-','');
+      const variable = !!document.getElementById('var-'+ds);
+      let habitual = tr.children[1]?.textContent?.trim() || "";
+      if (variable){
+        const v = (document.getElementById('var-'+ds)?.value || '').trim();
+        if (v) habitual = v;
+      }
+      persistState(user, ds, key, habitual, variable);
+    });
   }
 
   function paintTable(user){
     var key=currentYM();
-    return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
-      var cfg=arr[0], lock=arr[1], existing=arr[2];
-      $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
-      $('last-update').textContent = '—';
-      $('user-email').textContent = user.email;
+    Promise.all([ getConfig(user.uid), getLock(user.uid,key), monthReports(user.uid,key) ]).then(([cfg,lock,existing])=>{
+      document.getElementById('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
+      document.getElementById('user-email').textContent = user.email;
+      document.getElementById('rows').innerHTML='';
 
-      var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
-      var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
-      for(var d=1; d<=count; d++){
-        var date=new Date(y,m-1,d); var ds=fmt(date);
-        var info=habitualForDay(sbd,date); var hasExisting=!!existing[ds];
+      var sbd=(cfg&&cfg.scheduleByDay)||{};
+      var parts=key.split('-'), y=+parts[0], m=+parts[1], last=new Date(y,m,0).getDate();
+      for(var d=1; d<=last; d++){
+        var date=new Date(y,m-1,d), ds=fmt(date);
+        var info=habitualForDay(sbd,date), hasExisting=!!existing[ds];
         var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
         if(info.skip && !hasExisting) continue;
-        var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
-        var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
+
+        var pair = buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
+        document.getElementById('rows').append(pair[0], pair[1]);
+
         (function(ds,info){
-          var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
-          
-          // Manejadores de eventos para botones
-          if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
-          
-          applyStateToUI(ds,info.text,info.variable);
-          
-          if(existing[ds]){
-            var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
-            
-            if(info.variable){ var varInp=$('var-'+ds); if(varInp) varInp.value=existing[ds].horarioReportado||""; }
-            
-            if(existing[ds].tipoReporte==='EXTRA'){ var exI=$('ex-'+ds); if(exI) exI.value=existing[ds].horarioReportado||""; var st=rowState(ds); st.ex=true; st.extraHours=existing[ds].horarioReportado||""; setRowState(ds,st); }
-            if(existing[ds].tipoReporte==='MIXTO'){ 
-                var parts=(existing[ds].horarioReportado||"").split('+'); 
-                var exP=(parts[1]||"").trim(); 
-                var exI2=$('ex-'+ds); if(exI2) exI2.value=exP; 
-                var st2=rowState(ds); st2.ok=true; st2.ex=true; st2.extraHours=exP; setRowState(ds,st2); 
-                
-                // Si es MIXTO y variable, el horario habitual es el primer reporte
-                if (info.variable) { var varInp = $('var-'+ds); if(varInp) varInp.value=(parts[0]||"").trim(); }
-            }
-            
-            if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
-            applyStateToUI(ds,info.text,info.variable);
-          }
-          
-          // **********************************************
-          // ** PERSISTENCIA DE INPUTS (BLUR EVENTS) **
-          // **********************************************
-          
-          // 1. Campo de Comentario Principal
-          var cmInput=$('cm-'+ds); 
-          if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
-          
-          // 2. Campo de Horario Variable (si aplica)
-          var varInput = $('var-'+ds);
-          if (varInput) varInput.addEventListener('blur', function(){ 
-              // Se actualiza el estado de la UI y luego se persiste el nuevo valor de horario
-              applyStateToUI(ds, info.text, info.variable); 
-              persistState(user,ds,key,info.text,info.variable); 
+          var ok=document.getElementById('ok-'+ds), ab=document.getElementById('ab-'+ds), ex=document.getElementById('exbtn-'+ds);
+          if (ok) ok.addEventListener('click', ()=>{
+            const st=rowState(ds);
+            st.ok=!st.ok; if(st.ok) st.ab=false;
+            setRowState(ds,st); applyStateToUI(ds,info.text,info.variable);
+            persistState(user,ds,key,info.text,info.variable);
+          });
+          if (ab) ab.addEventListener('click', ()=>{
+            const st=rowState(ds);
+            st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; }
+            setRowState(ds,st); applyStateToUI(ds,info.text,info.variable);
+            persistState(user,ds,key,info.text,info.variable);
+          });
+          if (ex) ex.addEventListener('click', ()=>{
+            document.getElementById('sub-'+ds).classList.toggle('hidden');
+            const st=rowState(ds);
+            st.ex=!document.getElementById('sub-'+ds).classList.contains('hidden');
+            setRowState(ds,st); applyStateToUI(ds,info.text,info.variable);
+            persistState(user,ds,key,info.text,info.variable);
           });
 
-
-          // 3. Persistencia de Extras (Manteniendo la lógica original)
-          var rmEx=$('rmEx-'+ds);
-          var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
-          function autosaveExtra(){ 
-              var st=rowState(ds); 
-              var val=(exInput&&exInput.value||'').trim(); 
-              if(val){ 
-                  st.ex=true; 
-                  st.ab=false; 
-                  st.extraHours=val; 
-                  setRowState(ds,st); 
-                  applyStateToUI(ds,info.text,info.variable); 
-                  persistState(user,ds,key,info.text,info.variable); 
-              } 
+          var exI=document.getElementById('ex-'+ds), rm=document.getElementById('rmEx-'+ds);
+          function autosaveExtra(){
+            const st=rowState(ds);
+            const val=(exI&&exI.value||'').trim();
+            if(val){
+              st.ex=true; st.ok=true; st.ab=false; st.extraHours=val;
+              setRowState(ds,st); applyStateToUI(ds,info.text,info.variable);
+              persistState(user,ds,key,info.text,info.variable);
+            }
           }
-          if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
-          if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
-          if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          if(exI){ exI.addEventListener('blur',autosaveExtra); exI.addEventListener('change',autosaveExtra); }
+          if(rm){ rm.addEventListener('click', ()=>{
+            const st=rowState(ds); st.ex=false; st.extraHours="";
+            setRowState(ds,st); document.getElementById('sub-'+ds).classList.add('hidden'); applyStateToUI(ds,info.text,info.variable);
+            persistState(user,ds,key,info.text,info.variable);
+          }); }
+
+          applyStateToUI(ds,info.text,info.variable);
         })(ds,info);
       }
-      $('submit-month').disabled = lock.locked;
-      $('reset-month').disabled = lock.locked;
-      
-      // Manejador del botón Guardar Cambios
-      $('save-all').addEventListener('click', function(){
-        if(user) persistAllRows(user);
-      });
+
+      document.getElementById('submit-month').disabled = lock.locked;
+      document.getElementById('reset-month').disabled = lock.locked;
     });
   }
 
   function addOrUpdateSingleRow(user, dateStr){
     var key=currentYM();
-    return Promise.all([ getConfig(user.uid), getOneReport(user.uid, dateStr), getLock(user.uid, key) ]).then(function(arr){
-      var cfg=arr[0], report=arr[1], lock=arr[2];
-      var date=new Date(dateStr);
-      var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
-      
-      // Eliminar las 2 filas existentes para el día
-      var existingTr=$('row-'+dateStr); 
-      if(existingTr){ 
-        if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); 
-        existingTr.remove(); 
-      }
-      
-      var built=buildRow(dateStr, date, info.text, info.variable, lock.locked, report, info.skip && report && report.tipoReporte==='EXTRA');
-      var rows=$('rows'); var days=rows.querySelectorAll('tr[id^="row-"]');
-      var inserted=false;
-      for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-',''); if(ds>dateStr){ 
-        rows.insertBefore(built[0], days[i]); 
-        rows.insertBefore(built[1], days[i]); 
-        inserted=true; break; 
-      } }
-      if(!inserted){ 
-        rows.appendChild(built[0]); 
-        rows.appendChild(built[1]); 
-      }
+    Promise.all([ getConfig(user.uid), getOne(user.uid, dateStr), getLock(user.uid, key) ]).then(([cfg, report, lock])=>{
+      var date=new Date(dateStr), info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
+      var row=document.getElementById('row-'+dateStr); if(row){ if(row.nextSibling && row.nextSibling.id==='sub-'+dateStr) row.nextSibling.remove(); row.remove(); }
+      var pair=buildRow(dateStr,date,info.text,info.variable,lock.locked,report, info.skip && report && report.tipoReporte==='EXTRA');
+      var rows=document.getElementById('rows'), items=rows.querySelectorAll('tr[id^="row-"]'); var done=false;
+      for(var i=0;i<items.length;i++){ var ds=items[i].id.replace('row-',''); if(ds>dateStr){ rows.insertBefore(pair[0], items[i]); rows.insertBefore(pair[1], items[i]); done=true; break; } }
+      if(!done){ rows.append(pair[0],pair[1]); }
       applyStateToUI(dateStr, info.text, info.variable);
     });
   }
-  
-  function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
 
   function resetMonth(user){
-    var key=currentYM(); var db=firebase.firestore();
-    return db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
-      .then(function(snap){
-        var batch=db.batch(); snap.forEach(function(d){ batch.delete(d.ref); });
-        return batch.commit();
-      })
-      .then(function(){ return db.collection('locks').doc(user.uid+'_'+key).delete().catch(function(){}); })
-      .then(function(){ $('last-update').textContent=new Date().toLocaleString(); paintTable(user); });
+    var key=currentYM(), db=firebase.firestore();
+    db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
+      .then(s=>{ var b=db.batch(); s.forEach(d=>b.delete(d.ref)); return b.commit(); })
+      .then(()=> db.collection('locks').doc(user.uid+'_'+key).delete().catch(()=>{}))
+      .then(()=> paintTable(user));
   }
 
-  $('submit-month').addEventListener('click', function(){
-    var u=firebase.auth().currentUser; if(!u) return;
-    var key=currentYM();
-    setLock(u.uid,key,true).then(function(){ return getLock(u.uid,key); }).then(function(lk){
-      $('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
-      $('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
-      $('submit-month').disabled = lk.locked; $('reset-month').disabled = lk.locked;
+  // Botones globales (una sola vez)
+  (function attachGlobalHandlers(){
+    const btnSave = document.getElementById('save-all');
+    if (btnSave && !btnSave.dataset.bound) {
+      btnSave.addEventListener('click', function(){
+        const u = firebase.auth().currentUser;
+        if (u) persistAllRows(u);
+      });
+      btnSave.dataset.bound = "1";
+    }
+  })();
+
+  document.getElementById('submit-month').addEventListener('click', ()=>{
+    var u=firebase.auth().currentUser; if(!u) return; var key=currentYM();
+    setLock(u.uid,key,true).then(()=>getLock(u.uid,key)).then(lk=>{
+      document.getElementById('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
+      document.getElementById('submit-month').disabled = lk.locked; document.getElementById('reset-month').disabled = lk.locked;
     });
   });
-  $('reset-month').addEventListener('click', function(){
+  document.getElementById('reset-month').addEventListener('click', ()=>{
     var u=firebase.auth().currentUser; if(!u) return;
     if(!confirm('¿Resetear la planilla del mes actual? Esto borra los registros del mes.')) return;
     resetMonth(u);
   });
-
-  $('nh-save').addEventListener('click', function(){
-    var u=firebase.auth().currentUser; if(!u) return;
-    var key=currentYM();
-    var date=$('nh-date').value, range=($('nh-range').value||'').trim(), notes=$('nh-notes').value.trim();
-    var p=parseHM(range);
-    if(!date || !p){ return setMsg($('nh-msg'),'Completá fecha y horario (HH-HH)'); }
+  document.getElementById('nh-save').addEventListener('click', ()=>{
+    var u=firebase.auth().currentUser; if(!u) return; var key=currentYM();
+    var date=document.getElementById('nh-date').value, range=(document.getElementById('nh-range').value||'').trim(), notes=document.getElementById('nh-notes').value.trim();
+    var p=parseHM(range); if(!date || !p) return;
     var hrs=p.start+'-'+p.end;
-    getConfig(u.uid).then(function(cfg){
-      return firebase.firestore().collection('timesheets').doc(u.uid+'_'+date).set({
+    getConfig(u.uid).then(cfg =>
+      firebase.firestore().collection('timesheets').doc(u.uid+'_'+date).set({
         userId:u.uid,email:u.email,nombre:(cfg&&cfg.nombre)||'',
         fecha:date,mesAnio:key,tipoReporte:'EXTRA',horarioReportado:hrs,comentarios:notes||'Extra en día no habitual',
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      },{merge:true});
-    }).then(function(){ setMsg($('nh-msg'),'Extra guardada',true); $('last-update').textContent=new Date().toLocaleString(); return addOrUpdateSingleRow(u, date); });
+      },{merge:true})
+    ).then(()=> addOrUpdateSingleRow(u,date));
   });
 
-  $('register-btn').addEventListener('click', function(){
-    firebase.auth().createUserWithEmailAndPassword($('email').value, $('password').value)
-      .then(function(){ setMsg($('auth-msg'),'Cuenta creada',true); })
-      .catch(function(e){ setMsg($('auth-msg'), e.message); });
-  });
-  $('reset-btn').addEventListener('click', function(){
-    var em = ($('email') && $('email').value) || '';
-    if(!em){ return setMsg($('auth-msg'),'Ingresá tu email'); }
-    firebase.auth().sendPasswordResetEmail(em)
-      .then(function(){ setMsg($('auth-msg'),'Email enviado',true); })
-      .catch(function(e){ setMsg($('auth-msg'), e.message); });
-  });
-  $('logout-btn').addEventListener('click', function(){ firebase.auth().signOut(); });
+  document.getElementById('sel-month').addEventListener('change', ()=>paintCurrentUser());
+  document.getElementById('sel-year').addEventListener('change', ()=>paintCurrentUser());
+  document.getElementById('logout-btn').addEventListener('click', ()=>firebase.auth().signOut());
 
-  $('to-employee').addEventListener('click', function(){
-    $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
-    $('to-employee').classList.remove('ghost'); $('to-admin').classList.add('ghost');
-  });
-  $('to-admin').addEventListener('click', function(){
-    $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
-    $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
+  firebase.auth().onAuthStateChanged(user=>{
+    if(!user){ document.getElementById('auth-card').classList.remove('hidden'); document.getElementById('app-card').classList.add('hidden'); return; }
+    document.getElementById('auth-card').classList.add('hidden'); document.getElementById('app-card').classList.remove('hidden');
+    document.getElementById('user-email').textContent=user.email;
+    buildMonthSelectors(); paintTable(user);
   });
 
-  function onMonthChange(){ paintCurrentUser(); }
-  $('sel-month').addEventListener('change', onMonthChange);
-  $('sel-year').addEventListener('change', onMonthChange);
-
-  firebase.auth().onAuthStateChanged(function(user){
-    if(!user){
-      $('auth-card').classList.remove('hidden'); $('app-card').classList.add('hidden');
-      $('user-email').textContent='—'; $('view-switch').classList.add('hidden'); return;
-    }
-    $('auth-card').classList.add('hidden'); $('app-card').classList.remove('hidden');
-    $('user-email').textContent=user.email;
-
-    buildMonthSelectors();
-
-    getRole(user.uid).then(function(role){
-      $('role-chip').textContent=role.toUpperCase();
-      if(role==='admin'){
-        $('view-switch').classList.remove('hidden');
-        $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
-        $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
-      }else{
-        $('view-switch').classList.add('hidden');
-        $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
-      }
-      paintTable(user);
-    });
-  });
-
-  window.doLogin = function() {
-    const btn = document.getElementById('login-btn');
-    const msg = document.getElementById('auth-msg');
-    const email = (document.getElementById('email')?.value || '').trim();
-    const pass  = (document.getElementById('password')?.value || '');
-
-    if (btn.dataset.loading === '1') return;
-
-    btn.dataset.loading = '1';
-    btn.disabled = true;
-    btn.textContent = 'Ingresando...';
-
-    (async () => {
-      try {
-        if (!firebase?.auth) throw new Error('Firebase no está listo');
-        if (firebase.auth().setPersistence) {
-          await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-        }
-        await firebase.auth().signInWithEmailAndPassword(email, pass);
-        msg.textContent = 'Ingreso correcto';
-        msg.style.color = '#86efac';
-      } catch (e) {
-        console.error(e);
-        msg.textContent = e?.message || 'No se pudo ingresar';
-        msg.style.color = '#fecaca';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Entrar';
-        btn.dataset.loading = '0';
-      }
-    })();
+  window.doLogin = async function(){
+    const btn=document.getElementById('login-btn'), msg=document.getElementById('auth-msg');
+    const email=(document.getElementById('email')?.value||'').trim(), pass=(document.getElementById('password')?.value||'');
+    try{
+      btn.disabled=true; btn.textContent='Ingresando...';
+      if(firebase.auth().setPersistence) await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      await firebase.auth().signInWithEmailAndPassword(email,pass);
+      msg.textContent='Ingreso correcto'; msg.style.color='#86efac';
+    }catch(e){ msg.textContent=e?.message || 'No se pudo ingresar'; msg.style.color='#fecaca'; }
+    finally{ btn.disabled=false; btn.textContent='Entrar'; }
   };
+
+  function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
 })();
