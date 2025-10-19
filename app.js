@@ -275,15 +275,10 @@
         savePromises.push(cfgPromise.then(cfg => {
           const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
           
-          // FORZAR ACTUALIZACIÓN DE ESTADO INTERNO Y PERSISTENCIA DE INPUTS
-          
-          // Capturar el último estado de los inputs
+          // FORZAR SINCRONIZACIÓN DE ESTADO DE INPUTS
           const st = rowState(ds);
           st.comment = ($('cm-'+ds) && $('cm-'+ds).value) || "";
-          if (info.variable) {
-              const varInput = $('var-'+ds);
-              if (varInput) st.extraHours = (varInput.value || '').trim(); // NOTA: Esto es para simplificar, en realidad es el horario reportado, no extraHours.
-          }
+          
           const exInput = $('ex-'+ds);
           if (exInput) st.extraHours = (exInput.value || '').trim();
           const cmx = $('cmEx-'+ds);
@@ -329,4 +324,250 @@
       var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
       var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
       for(var d=1; d<=count; d++){
-        var date=
+        var date=new Date(y,m-1,d); var ds=fmt(date);
+        var info=habitualForDay(sbd,date); var hasExisting=!!existing[ds];
+        var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
+        if(info.skip && !hasExisting) continue;
+        var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
+        var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
+        (function(ds,info){
+          var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
+          
+          // Manejadores de eventos para botones
+          if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+          if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); });
+          
+          applyStateToUI(ds,info.text,info.variable);
+          
+          if(existing[ds]){
+            var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
+            
+            // Cargar horario variable si existe
+            if(info.variable){ 
+                var varInp=$('var-'+ds); 
+                var horarioReportado = existing[ds].horarioReportado;
+                if(horarioReportado){
+                    var parts = horarioReportado.split('+');
+                    varInp.value = (existing[ds].tipoReporte === 'MIXTO' ? (parts[0] || '').trim() : horarioReportado).trim();
+                }
+            }
+            
+            // Cargar estado de extra
+            if(existing[ds].tipoReporte==='EXTRA' || existing[ds].tipoReporte==='MIXTO'){ 
+                var exI=$('ex-'+ds); 
+                var parts = existing[ds].horarioReportado.split('+');
+                var exHours = (existing[ds].tipoReporte === 'MIXTO' ? parts[1] : parts[0] || "").trim();
+                
+                if(exI) exI.value = exHours; 
+                var st=rowState(ds); st.ex=true; st.extraHours=exHours; setRowState(ds,st); 
+            }
+            
+            if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
+            applyStateToUI(ds,info.text,info.variable);
+          }
+          
+          // **********************************************
+          // ** PERSISTENCIA DE INPUTS (BLUR EVENTS) **
+          // **********************************************
+          
+          // 1. Campo de Comentario Principal
+          var cmInput=$('cm-'+ds); 
+          if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
+          
+          // 2. Campo de Horario Variable (si aplica)
+          var varInput = $('var-'+ds);
+          if (varInput) varInput.addEventListener('blur', function(){ 
+              applyStateToUI(ds, info.text, info.variable); 
+              persistState(user,ds,key,info.text,info.variable); 
+          });
+
+
+          // 3. Persistencia de Extras
+          var rmEx=$('rmEx-'+ds);
+          var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
+          function autosaveExtra(){ 
+              var st=rowState(ds); 
+              var val=(exInput&&exInput.value||'').trim(); 
+              if(val){ 
+                  st.ex=true; 
+                  st.ab=false; 
+                  st.extraHours=val; 
+                  setRowState(ds,st); 
+                  applyStateToUI(ds,info.text,info.variable); 
+                  persistState(user,ds,key,info.text,info.variable); 
+              } 
+          }
+          if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
+          if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
+          if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
+        })(ds,info);
+      }
+      $('submit-month').disabled = lock.locked;
+      $('reset-month').disabled = lock.locked;
+      
+      // Manejador del botón Guardar Cambios
+      $('save-all').addEventListener('click', function(){
+        if(user) persistAllRows(user);
+      });
+    });
+  }
+
+  function addOrUpdateSingleRow(user, dateStr){
+    var key=currentYM();
+    return Promise.all([ getConfig(user.uid), getOneReport(user.uid, dateStr), getLock(user.uid, key) ]).then(function(arr){
+      var cfg=arr[0], report=arr[1], lock=arr[2];
+      var date=new Date(dateStr);
+      var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
+      
+      // Eliminar las 2 filas existentes para el día
+      var existingTr=$('row-'+dateStr); 
+      if(existingTr){ 
+        if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); 
+        existingTr.remove(); 
+      }
+      
+      var built=buildRow(dateStr, date, info.text, info.variable, lock.locked, report, info.skip && report && report.tipoReporte==='EXTRA');
+      var rows=$('rows'); var days=rows.querySelectorAll('tr[id^="row-"]');
+      var inserted=false;
+      for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-',''); if(ds>dateStr){ 
+        rows.insertBefore(built[0], days[i]); 
+        rows.insertBefore(built[1], days[i]); 
+        inserted=true; break; 
+      } }
+      if(!inserted){ 
+        rows.appendChild(built[0]); 
+        rows.appendChild(built[1]); 
+      }
+      applyStateToUI(dateStr, info.text, info.variable);
+    });
+  }
+  
+  function paintCurrentUser(){ var u=firebase.auth().currentUser; if(u) paintTable(u); }
+
+  function resetMonth(user){
+    var key=currentYM(); var db=firebase.firestore();
+    return db.collection('timesheets').where('userId','==',user.uid).where('mesAnio','==',key).get()
+      .then(function(snap){
+        var batch=db.batch(); snap.forEach(function(d){ batch.delete(d.ref); });
+        return batch.commit();
+      })
+      .then(function(){ return db.collection('locks').doc(user.uid+'_'+key).delete().catch(function(){}); })
+      .then(function(){ $('last-update').textContent=new Date().toLocaleString(); paintTable(user); });
+  }
+
+  $('submit-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    var key=currentYM();
+    setLock(u.uid,key,true).then(function(){ return getLock(u.uid,key); }).then(function(lk){
+      $('lock-state').textContent = lk.locked? 'Bloqueado':'Editable';
+      $('last-update').textContent = lk.lastSubmitted? new Date(lk.lastSubmitted.toDate()).toLocaleString() : '—';
+      $('submit-month').disabled = lk.locked; $('reset-month').disabled = lk.locked;
+    });
+  });
+  $('reset-month').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    if(!confirm('¿Resetear la planilla del mes actual? Esto borra los registros del mes.')) return;
+    resetMonth(u);
+  });
+
+  $('nh-save').addEventListener('click', function(){
+    var u=firebase.auth().currentUser; if(!u) return;
+    var key=currentYM();
+    var date=$('nh-date').value, range=($('nh-range').value||'').trim(), notes=$('nh-notes').value.trim();
+    var p=parseHM(range);
+    if(!date || !p){ return setMsg($('nh-msg'),'Completá fecha y horario (HH-HH)'); }
+    var hrs=p.start+'-'+p.end;
+    getConfig(u.uid).then(function(cfg){
+      return firebase.firestore().collection('timesheets').doc(u.uid+'_'+date).set({
+        userId:u.uid,email:u.email,nombre:(cfg&&cfg.nombre)||'',
+        fecha:date,mesAnio:key,tipoReporte:'EXTRA',horarioReportado:hrs,comentarios:notes||'Extra en día no habitual',
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true});
+    }).then(function(){ setMsg($('nh-msg'),'Extra guardada',true); $('last-update').textContent=new Date().toLocaleString(); return addOrUpdateSingleRow(u, date); });
+  });
+
+  $('register-btn').addEventListener('click', function(){
+    firebase.auth().createUserWithEmailAndPassword($('email').value, $('password').value)
+      .then(function(){ setMsg($('auth-msg'),'Cuenta creada',true); })
+      .catch(function(e){ setMsg($('auth-msg'), e.message); });
+  });
+  $('reset-btn').addEventListener('click', function(){
+    var em = ($('email') && $('email').value) || '';
+    if(!em){ return setMsg($('auth-msg'),'Ingresá tu email'); }
+    firebase.auth().sendPasswordResetEmail(em)
+      .then(function(){ setMsg($('auth-msg'),'Email enviado',true); })
+      .catch(function(e){ setMsg($('auth-msg'), e.message); });
+  });
+  $('logout-btn').addEventListener('click', function(){ firebase.auth().signOut(); });
+
+  $('to-employee').addEventListener('click', function(){
+    $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
+    $('to-employee').classList.remove('ghost'); $('to-admin').classList.add('ghost');
+  });
+  $('to-admin').addEventListener('click', function(){
+    $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
+    $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
+  });
+
+  function onMonthChange(){ paintCurrentUser(); }
+  $('sel-month').addEventListener('change', onMonthChange);
+  $('sel-year').addEventListener('change', onMonthChange);
+
+  firebase.auth().onAuthStateChanged(function(user){
+    if(!user){
+      $('auth-card').classList.remove('hidden'); $('app-card').classList.add('hidden');
+      $('user-email').textContent='—'; $('view-switch').classList.add('hidden'); return;
+    }
+    $('auth-card').classList.add('hidden'); $('app-card').classList.remove('hidden');
+    $('user-email').textContent=user.email;
+
+    buildMonthSelectors();
+
+    getRole(user.uid).then(function(role){
+      $('role-chip').textContent=role.toUpperCase();
+      if(role==='admin'){
+        $('view-switch').classList.remove('hidden');
+        $('employee-view').classList.add('hidden'); $('admin-view').classList.remove('hidden');
+        $('to-admin').classList.remove('ghost'); $('to-employee').classList.add('ghost');
+      }else{
+        $('view-switch').classList.add('hidden');
+        $('employee-view').classList.remove('hidden'); $('admin-view').classList.add('hidden');
+      }
+      paintTable(user);
+    });
+  });
+
+  window.doLogin = function() {
+    const btn = document.getElementById('login-btn');
+    const msg = document.getElementById('auth-msg');
+    const email = (document.getElementById('email')?.value || '').trim();
+    const pass  = (document.getElementById('password')?.value || '');
+
+    if (btn.dataset.loading === '1') return;
+
+    btn.dataset.loading = '1';
+    btn.disabled = true;
+    btn.textContent = 'Ingresando...';
+
+    (async () => {
+      try {
+        if (!firebase?.auth) throw new Error('Firebase no está listo');
+        if (firebase.auth().setPersistence) {
+          await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        }
+        await firebase.auth().signInWithEmailAndPassword(email, pass);
+        msg.textContent = 'Ingreso correcto';
+        msg.style.color = '#86efac';
+      } catch (e) {
+        console.error(e);
+        msg.textContent = e?.message || 'No se pudo ingresar';
+        msg.style.color = '#fecaca';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+        btn.dataset.loading = '0';
+      }
+    })();
+  };
+})();
