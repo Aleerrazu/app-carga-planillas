@@ -29,17 +29,18 @@
   function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
   // **********************************************
-  // ** CORRECCIÓN: LECTURA DE ROL (Prioriza employee_config/employee_uids) **
+  // ** CORRECCIÓN DE ROL: BUSCAR EN employee_config **
   // **********************************************
   function getRole(uid){
-    // Busca el rol en employee_config (donde el rol 'admin' parece estar configurado)
+    // Utiliza una consulta para encontrar el documento del usuario en la colección employee_config
     return firebase.firestore().collection('employee_config').where('userId','==',uid).limit(1).get()
       .then(function(q){ 
           if(!q.empty) {
               var data = q.docs[0].data();
+              // Asume que si el campo role existe y es 'admin', el usuario es admin.
               if (data && data.role === 'admin') return 'admin';
           }
-          // Si no encuentra rol en employee_config, asume 'employee'
+          // Si no encuentra el documento o el rol no es 'admin', devuelve 'employee'.
           return 'employee'; 
       }).catch(function(){ return 'employee'; });
   }
@@ -128,14 +129,15 @@
     // TD4 se convierte en COMENTARIO
     var td4_comment=document.createElement('td'); 
     var cm=document.createElement('input'); cm.id='cm-'+ds; 
+    
     // **********************************************
     // ** CORRECCIÓN DE UNDEFINED **
     // **********************************************
-    cm.placeholder = existing && existing.comentarios === "undefined" ? "Comentario..." : "Comentario...";
-    if (existing && existing.comentarios && existing.comentarios !== "undefined") {
-        cm.value = existing.comentarios;
+    var commentText = existing && existing.comentarios === "undefined" ? "" : existing && existing.comentarios ? existing.comentarios : "Comentario...";
+    cm.placeholder = "Comentario...";
+    if (commentText !== "Comentario...") {
+        cm.value = commentText;
     }
-    // **********************************************
     
     td4_comment.appendChild(cm);
 
@@ -198,7 +200,6 @@
     if(exb) exb.classList.toggle('active', !!st.ex);
     
     // Sincronizar inputs con el estado interno
-    // Se asegura de no sobrescribir el campo de comentario con 'undefined' o 'null'
     if($('cm-'+ds)) $('cm-'+ds).value = st.comment || "";
     if($('cmEx-'+ds)) $('cmEx-'+ds).value = st.cmExtra;
     
@@ -243,7 +244,6 @@
     var st=rowState(ds);
     
     // **************** CRITICAL FIX: SINCRONIZAR INPUTS EN ESTADO INTERNO ****************
-    // Se asegura que el estado interno refleje lo que el usuario escribió ANTES de la lógica
     st.comment = ($('cm-'+ds)&&$('cm-'+ds).value)||"";
     st.cmExtra = ($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"";
     st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||""; 
@@ -263,10 +263,8 @@
     
     var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
     
-    // Si no hay tipo (botón seleccionado) ni comentario, eliminar el registro
     if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
     
-    // Si hay datos, guardar
     return getConfig(user.uid).then(function(cfg){
       return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
         .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
@@ -483,6 +481,7 @@
         const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
         const cfgPromise = getConfig(user.uid);
         
+        // **************** CRITICAL FIX: FORZAR ESTADO DEL BOTÓN DESDE EL DOM ****************
         const ok = $('ok-'+ds);
         const ab = $('ab-'+ds);
         const exb = $('exbtn-'+ds);
