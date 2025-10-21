@@ -32,16 +32,22 @@
   // ** CORRECCIÓN DE ROL: BUSCAR EN employee_config **
   // **********************************************
   function getRole(uid){
-    // Utiliza una consulta para encontrar el documento del usuario en la colección employee_config
+    const storedRole = localStorage.getItem('userRole_' + uid);
+    if (storedRole) {
+        return Promise.resolve(storedRole);
+    }
+    
     return firebase.firestore().collection('employee_config').where('userId','==',uid).limit(1).get()
       .then(function(q){ 
+          let role = 'employee';
           if(!q.empty) {
               var data = q.docs[0].data();
-              // Asume que si el campo role existe y es 'admin', el usuario es admin.
-              if (data && data.role === 'admin') return 'admin';
+              if (data && data.role === 'admin') {
+                  role = 'admin';
+              }
           }
-          // Si no encuentra el documento o el rol no es 'admin', devuelve 'employee'.
-          return 'employee'; 
+          localStorage.setItem('userRole_' + uid, role);
+          return role; 
       }).catch(function(){ return 'employee'; });
   }
 
@@ -133,9 +139,9 @@
     // **********************************************
     // ** CORRECCIÓN DE UNDEFINED **
     // **********************************************
-    var commentText = existing && existing.comentarios === "undefined" ? "" : existing && existing.comentarios ? existing.comentarios : "Comentario...";
+    var commentText = existing && existing.comentarios === "undefined" ? "" : existing && existing.comentarios ? existing.comentarios : "";
     cm.placeholder = "Comentario...";
-    if (commentText !== "Comentario...") {
+    if (commentText) {
         cm.value = commentText;
     }
     
@@ -481,7 +487,6 @@
         const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
         const cfgPromise = getConfig(user.uid);
         
-        // **************** CRITICAL FIX: FORZAR ESTADO DEL BOTÓN DESDE EL DOM ****************
         const ok = $('ok-'+ds);
         const ab = $('ab-'+ds);
         const exb = $('exbtn-'+ds);
