@@ -29,7 +29,7 @@
   function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
   // **********************************************
-  // ** CORRECCIÓN DE ROL: BUSCAR EN employee_config **
+  // ** CORRECCIÓN DE ROL: BUSCAR EN employee_config (Con LocalStorage para velocidad) **
   // **********************************************
   function getRole(uid){
     const storedRole = localStorage.getItem('userRole_' + uid);
@@ -589,7 +589,11 @@
       .then(function(){ setMsg($('auth-msg'),'Email enviado',true); })
       .catch(function(e){ setMsg($('auth-msg'), e.message); });
   });
-  $('logout-btn').addEventListener('click', function(){ firebase.auth().signOut(); });
+  $('logout-btn').addEventListener('click', function(){ 
+      firebase.auth().signOut(); 
+      // Borrar LocalStorage al salir para forzar una nueva lectura de rol
+      localStorage.removeItem('userRole_' + firebase.auth().currentUser.uid);
+  });
   
   // Se eliminan los event listeners 'to-employee' y 'to-admin' ya que se eliminó el switch en HTML
 
