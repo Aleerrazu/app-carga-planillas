@@ -29,7 +29,7 @@
   function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
   // **********************************************
-  // ** CORRECCIÓN DE ROL: BUSCAR en employee_config (Final) **
+  // ** FUNCIONES DE ROL Y CONFIGURACIÓN **
   // **********************************************
   function getRole(uid){
     const storedRole = localStorage.getItem('userRole_' + uid);
@@ -233,7 +233,7 @@
       if(hrsEx) hrsEx.textContent = p2? (p2.hours+' h') : '—';
       pusoAlgo=true;
     }else{
-      if(hrsEx) hrsEx.textContent='—';
+      if(hrsEx) hrsMain.innerHTML='<span class="tag">—</span>'; // Mantener el chip vacío
     }
     if(!pusoAlgo){
       var dash=document.createElement('span'); dash.className='tag'; dash.textContent='—'; hrsMain.appendChild(dash);
@@ -331,9 +331,9 @@
 
   function paintTable(user, role){ 
     $('user-email').textContent = user.email;
-    buildMonthSelectors();
-
+    
     if (role === 'employee') {
+        buildMonthSelectors(); // Solo se necesita en vista de empleado
         var key=currentYM();
         $('employee-view').classList.remove('hidden');
         $('admin-view').classList.add('hidden');
@@ -422,7 +422,6 @@
             });
         });
     } else if (role === 'admin') {
-        // Si es admin, solo se asegura de que la vista de empleado esté oculta y la de admin esté visible
         $('employee-view').classList.add('hidden');
         $('admin-view').classList.remove('hidden');
     }
