@@ -29,7 +29,7 @@
   function setMsg(el, txt, ok){ if(!el) return; el.textContent=txt; el.style.color = ok ? '#86efac' : '#fecaca'; }
 
   // **********************************************
-  // ** FUNCIONES DE ROL Y CONFIGURACIÓN **
+  // ** CORRECCIÓN DE ROL: BUSCAR en employee_config (Final) **
   // **********************************************
   function getRole(uid){
     const storedRole = localStorage.getItem('userRole_' + uid);
@@ -271,179 +271,8 @@
   }
   
   // **********************************************
-  // ** FUNCIÓN DE CARGA DEL PANEL DE ADMINISTRACIÓN **
+  // ** FUNCIÓN DE GUARDADO MANUAL (MASIVO) **
   // **********************************************
-  let allEmployees = []; // Cache para todos los empleados
-
-  function loadAdminData(user) {
-      const db = firebase.firestore();
-      const employeeListContainer = $('employee-list-container');
-      const scheduleEmployeeList = $('schedule-employee-list');
-
-      // Limpiar listas anteriores
-      if (employeeListContainer) employeeListContainer.innerHTML = '';
-      if (scheduleEmployeeList) scheduleEmployeeList.innerHTML = '';
-
-      // 1. Cargar todos los empleados de la colección employee_config
-      db.collection('employee_config').get()
-          .then(snapshot => {
-              allEmployees = [];
-              const fragmentEmpList = document.createDocumentFragment();
-              const fragmentScheduleList = document.createDocumentFragment();
-
-              snapshot.forEach(doc => {
-                  const data = doc.data();
-                  if (data.userId && data.nombre) {
-                      allEmployees.push(data);
-                      
-                      const emailParts = data.email.split('@');
-                      const username = emailParts.length > 1 ? `@${emailParts[0]}` : data.email;
-                      const isActive = true; // Asumir activo por simplicidad o basar en un campo real
-
-                      // Función para crear el ítem de lista
-                      const createListItem = (containerType) => {
-                          const item = document.createElement('div');
-                          item.className = 'admin-col-list-item';
-                          item.setAttribute('data-user-id', data.userId);
-                          
-                          let content = `
-                              ${data.nombre || 'Sin Nombre'} 
-                              <span class="username">${username}</span>
-                              <span class="chip" style="background: var(--good);">Activo</span>
-                          `;
-                          
-                          // Para la lista de horarios, el nombre es suficiente
-                          if (containerType === 'schedule') {
-                              content = data.nombre || 'Sin Nombre';
-                              item.className = 'admin-col-list-item'; // Clase base sin username/chip
-                          }
-                          
-                          item.innerHTML = content;
-                          
-                          // Añadir evento de clic para seleccionar empleado
-                          item.addEventListener('click', () => {
-                              selectEmployee(data.userId);
-                          });
-                          return item;
-                      };
-
-                      if (employeeListContainer) {
-                          fragmentEmpList.appendChild(createListItem('employee'));
-                      }
-                      if (scheduleEmployeeList) {
-                          fragmentScheduleList.appendChild(createListItem('schedule'));
-                      }
-                  }
-              });
-              
-              if (employeeListContainer) employeeListContainer.appendChild(fragmentEmpList);
-              if (scheduleEmployeeList) scheduleEmployeeList.appendChild(fragmentScheduleList);
-              
-              // Inicializar la gestión de horarios después de cargar
-              if (allEmployees.length > 0) {
-                  selectEmployee(allEmployees[0].userId);
-              } else {
-                  $('schedule-config-form').innerHTML = '<p class="muted">No hay empleados registrados.</p>';
-              }
-          })
-          .catch(error => {
-              console.error("Error cargando lista de empleados:", error);
-              if (employeeListContainer) employeeListContainer.innerHTML = '<p class="muted">Error al cargar la lista.</p>';
-              if (scheduleEmployeeList) scheduleEmployeeList.innerHTML = '<p class="muted">Error al cargar la lista.</p>';
-          });
-  }
-
-  // **********************************************
-  // ** LÓGICA DE SELECCIÓN DE EMPLEADO (Horarios) **
-  // **********************************************
-  function selectEmployee(userId) {
-      const selectedEmployee = allEmployees.find(emp => emp.userId === userId);
-      const listItems = document.querySelectorAll('#schedule-employee-list .admin-col-list-item');
-      const formTitle = document.querySelector('#admin-section-horarios .card b');
-      const formContainer = $('schedule-config-form');
-      const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-      const scheduleByDay = (selectedEmployee && selectedEmployee.scheduleByDay) || {};
-
-      // 1. Marcar el empleado seleccionado
-      listItems.forEach(item => {
-          if (item.getAttribute('data-user-id') === userId) {
-              item.classList.add('selected');
-          } else {
-              item.classList.remove('selected');
-          }
-      });
-      
-      if (!selectedEmployee) {
-          formTitle.textContent = 'Horario';
-          formContainer.innerHTML = '<p class="muted">Selecciona un empleado.</p>';
-          return;
-      }
-      
-      // 2. Actualizar el título del formulario
-      formTitle.textContent = `Horario de ${selectedEmployee.nombre || selectedEmployee.email}`;
-      
-      // 3. Renderizar el formulario de horarios
-      let formHTML = '';
-      
-      days.forEach((day, index) => {
-          const key = wkey(new Date(2000, 0, index)); // Obtener 'sun', 'mon', etc.
-          const schedule = scheduleByDay[key] || {};
-          const value = schedule.start && schedule.end ? `${schedule.start}-${schedule.end}` : '';
-          
-          formHTML += `
-              <div class="schedule-day-input">
-                  <label>${day}</label>
-                  <input type="text" id="schedule-${key}" data-day-key="${key}" placeholder="Ej: 08:00-16:00 o vacío" value="${value}">
-              </div>
-          `;
-      });
-      
-      formHTML += `<button class="btn" style="width: 100%; margin-top: 15px;" id="save-schedule-btn" data-user-id="${userId}">Guardar Horario</button>`;
-      
-      formContainer.innerHTML = formHTML;
-      
-      // 4. Adjuntar manejador de guardado (implementación pendiente en persistencia)
-      $('save-schedule-btn').addEventListener('click', () => {
-          // Lógica de guardado aquí (implementación pendiente)
-          console.log(`Guardando horario para el usuario: ${userId}`);
-      });
-  }
-
-
-  // **********************************************
-  // ** FUNCIONES DE PLANILLA Y PERSISTENCIA (SIN CAMBIOS) **
-  // **********************************************
-  
-  function persistState(user, ds, key, habitual, variable){
-    var st=rowState(ds);
-    
-    st.comment = ($('cm-'+ds)&&$('cm-'+ds).value)||"";
-    st.cmExtra = ($('cmEx-'+ds)&&$('cmEx-'+ds).value)||"";
-    st.extraHours = ($('ex-'+ds)&&$('ex-'+ds).value)||""; 
-    setRowState(ds, st); 
-
-    var tipo=null, hr="", com=st.comment, cmEx=st.cmExtra;
-    
-    if (variable && st.ok) {
-        var v = ($('var-'+ds)&&$('var-'+ds).value||'').trim();
-        if (v) habitual = v;
-    }
-    
-    if(st.ok && st.ex){ var h=habitual; hr=h+" + "+st.extraHours; tipo='MIXTO'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
-    else if(st.ok){ var h2=habitual; hr=h2; tipo='HABITUAL'; }
-    else if(st.ab){ tipo='FALTA'; hr=""; }
-    else if(st.ex){ hr=st.extraHours; tipo='EXTRA'; if(cmEx) com = com? (com+" | Extra: "+cmEx):("Extra: "+cmEx); }
-    
-    var ref=firebase.firestore().collection('timesheets').doc(user.uid+'_'+ds);
-    
-    if(!tipo && !com){ return ref.delete().catch(function(){}).then(function(){ $('last-update').textContent=new Date().toLocaleString(); }); }
-    
-    return getConfig(user.uid).then(function(cfg){
-      return ref.set({userId:user.uid,email:user.email,nombre:(cfg&&cfg.nombre)||'',fecha:ds,mesAnio:key,tipoReporte:tipo||'',horarioReportado:hr,comentarios:com,timestamp: firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
-        .then(function(){ $('last-update').textContent=new Date().toLocaleString(); });
-    });
-  }
-  
   function persistAllRows(user) {
     const key = currentYM();
     const rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
@@ -504,7 +333,7 @@
     $('user-email').textContent = user.email;
     
     if (role === 'employee') {
-        buildMonthSelectors();
+        buildMonthSelectors(); 
         var key=currentYM();
         $('employee-view').classList.remove('hidden');
         $('admin-view').classList.add('hidden');
@@ -593,249 +422,6 @@
             });
         });
     } else if (role === 'admin') {
-        // La vista ya está configurada en onAuthStateChanged
-        $('employee-view').classList.add('hidden');
-        $('admin-view').classList.remove('hidden');
-        loadAdminData(user); // Carga los datos específicos del administrador
-    }
-  }
-  
-  // **********************************************
-  // ** CARGA DE DATOS PARA EL PANEL DE ADMINISTRACIÓN **
-  // **********************************************
-
-  let allEmployees = []; // Cache para todos los empleados
-
-  function loadEmployeesAndRenderLists() {
-      const db = firebase.firestore();
-      const employeeListContainer = $('employee-list-container');
-      const scheduleEmployeeList = $('schedule-employee-list');
-      const reviewEmployeeList = $('review-employee-list');
-
-      // Limpiar listas anteriores
-      if (employeeListContainer) employeeListContainer.innerHTML = '';
-      if (scheduleEmployeeList) scheduleEmployeeList.innerHTML = '';
-      if (reviewEmployeeList) reviewEmployeeList.innerHTML = '';
-
-      // 1. Cargar todos los empleados de la colección employee_config
-      db.collection('employee_config').get()
-          .then(snapshot => {
-              allEmployees = [];
-              const fragmentEmpList = document.createDocumentFragment();
-              const fragmentScheduleList = document.createDocumentFragment();
-              const fragmentReviewList = document.createDocumentFragment();
-              
-              snapshot.forEach(doc => {
-                  const data = doc.data();
-                  if (data.userId && data.nombre) {
-                      allEmployees.push(data);
-                      
-                      const emailParts = data.email.split('@');
-                      const username = emailParts.length > 1 ? `@${emailParts[0]}` : data.email;
-                      const isActive = true; // Asumir activo por simplicidad
-
-                      // Crear item de lista para la pestaña Empleados
-                      const itemEmp = document.createElement('div');
-                      itemEmp.className = 'admin-col-list-item';
-                      itemEmp.setAttribute('data-user-id', data.userId);
-                      itemEmp.innerHTML = `${data.nombre || 'Sin Nombre'} <span class="username">${username}</span> <span class="chip" style="background: var(--good);">Activo</span>`;
-                      fragmentEmpList.appendChild(itemEmp);
-                      
-                      // Crear item de lista para la pestaña Horarios
-                      const itemSchedule = document.createElement('div');
-                      itemSchedule.className = 'admin-col-list-item';
-                      itemSchedule.setAttribute('data-user-id', data.userId);
-                      itemSchedule.textContent = data.nombre || 'Sin Nombre';
-                      itemSchedule.addEventListener('click', () => {
-                           selectEmployeeSchedule(data.userId);
-                      });
-                      fragmentScheduleList.appendChild(itemSchedule);
-                      
-                      // Crear item de lista para la pestaña Revisión
-                      // NOTA: El estado de 'Entregada' o 'Pendiente' requiere una consulta adicional a 'locks'
-                      const itemReview = document.createElement('div');
-                      itemReview.className = 'admin-col-list-item';
-                      itemReview.textContent = data.nombre || 'Sin Nombre';
-                      // Simulación del estado (necesitaría lógica de consulta real)
-                      const statusChip = document.createElement('span');
-                      statusChip.className = 'chip';
-                      statusChip.textContent = 'Pendiente'; // Estado por defecto
-                      statusChip.style.background = 'var(--bad)'; 
-                      itemReview.appendChild(statusChip);
-                      fragmentReviewList.appendChild(itemReview);
-                  }
-              });
-              
-              if (employeeListContainer) employeeListContainer.appendChild(fragmentEmpList);
-              if (scheduleEmployeeList) scheduleEmployeeList.appendChild(fragmentScheduleList);
-              if (reviewEmployeeList) reviewEmployeeList.appendChild(fragmentReviewList);
-              
-              // Inicializar la gestión de horarios después de cargar
-              if (allEmployees.length > 0) {
-                  selectEmployeeSchedule(allEmployees[0].userId);
-              } else {
-                  $('schedule-config-form').innerHTML = '<p class="muted">No hay empleados registrados.</p>';
-              }
-          })
-          .catch(error => {
-              console.error("Error cargando lista de empleados:", error);
-              if (employeeListContainer) employeeListContainer.innerHTML = '<p class="muted">Error al cargar la lista.</p>';
-              if (scheduleEmployeeList) scheduleEmployeeList.innerHTML = '<p class="muted">Error al cargar la lista.</p>';
-          });
-  }
-  
-  function selectEmployeeSchedule(userId) {
-      const selectedEmployee = allEmployees.find(emp => emp.userId === userId);
-      const listItems = document.querySelectorAll('#schedule-employee-list .admin-col-list-item');
-      const formTitle = document.querySelector('#admin-section-horarios .card b');
-      const formContainer = $('schedule-config-form');
-      const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-      const scheduleByDay = (selectedEmployee && selectedEmployee.scheduleByDay) || {};
-
-      // 1. Marcar el empleado seleccionado
-      listItems.forEach(item => {
-          if (item.getAttribute('data-user-id') === userId) {
-              item.classList.add('selected');
-          } else {
-              item.classList.remove('selected');
-          }
-      });
-      
-      if (!selectedEmployee) {
-          formTitle.textContent = 'Horario';
-          formContainer.innerHTML = '<p class="muted">Selecciona un empleado.</p>';
-          return;
-      }
-      
-      // 2. Actualizar el título del formulario
-      formTitle.textContent = `Horario de ${selectedEmployee.nombre || selectedEmployee.email}`;
-      
-      // 3. Renderizar el formulario de horarios
-      let formHTML = '';
-      
-      // Usamos los índices [0=Domingo, 1=Lunes, ..., 6=Sábado] y mapeamos a las claves 'sun', 'mon', etc.
-      const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-      
-      days.forEach((day, index) => {
-          const key = dayKeys[index];
-          const schedule = scheduleByDay[key] || {};
-          // Horario en formato HH:MM-HH:MM
-          const value = schedule.start && schedule.end ? `${schedule.start}-${schedule.end}` : '';
-          
-          formHTML += `
-              <div class="schedule-day-input">
-                  <label>${day}</label>
-                  <input type="text" id="schedule-${key}" data-day-key="${key}" placeholder="Ej: 08:00-16:00 o vacío" value="${value}">
-              </div>
-          `;
-      });
-      
-      formHTML += `<button class="btn" style="width: 100%; margin-top: 15px;" id="save-schedule-btn" data-user-id="${userId}">Guardar Horario</button>`;
-      
-      formContainer.innerHTML = formHTML;
-      
-      // 4. Adjuntar manejador de guardado (implementación pendiente en persistencia)
-      $('save-schedule-btn').addEventListener('click', () => {
-          // Lógica de guardado aquí (implementación pendiente)
-          console.log(`Guardando horario para el usuario: ${userId}`);
-      });
-  }
-
-
-  function paintTable(user, role){ 
-    $('user-email').textContent = user.email;
-    
-    if (role === 'employee') {
-        buildMonthSelectors();
-        var key=currentYM();
-        $('employee-view').classList.remove('hidden');
-        $('admin-view').classList.add('hidden');
-        
-        return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
-            var cfg=arr[0], lock=arr[1], existing=arr[2];
-            $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
-            $('last-update').textContent = '—';
-            
-            var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
-            var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
-            for(var d=1; d<=count; d++){
-                var date=new Date(y,m-1,d); var ds=fmt(date);
-                var info=habitualForDay(sbd,date); var hasExisting=!!existing[ds];
-                var isOffExtraOnly = info.skip && hasExisting && existing[ds].tipoReporte==='EXTRA';
-                if(info.skip && !hasExisting) continue;
-                var built=buildRow(ds,date,info.text,info.variable,lock.locked,existing[ds],isOffExtraOnly);
-                var tr=built[0], sub=built[1]; rows.appendChild(tr); rows.appendChild(sub);
-                (function(ds,info){
-                    var ok=$('ok-'+ds), ab=$('ab-'+ds), exb=$('exbtn-'+ds);
-                    
-                    if(ok) ok.addEventListener('click', function(){ var st=rowState(ds); st.ok=!st.ok; if(st.ok) st.ab=false; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-                    if(ab) ab.addEventListener('click', function(){ var st=rowState(ds); st.ab=!st.ab; if(st.ab){ st.ok=false; st.ex=false; } setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-                    if(exb) exb.addEventListener('click', function(){ var st=rowState(ds); st.ex=!st.ex; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-                    
-                    applyStateToUI(ds,info.text,info.variable);
-                    
-                    if(existing[ds]){
-                        var cm=$('cm-'+ds); if(cm) cm.value=existing[ds].comentarios||"";
-                        
-                        if(info.variable){ 
-                            var varInp=$('var-'+ds); 
-                            var horarioReportado = existing[ds].horarioReportado;
-                            if(horarioReportado){
-                                var parts = horarioReportado.split('+');
-                                varInp.value = (existing[ds].tipoReporte === 'MIXTO' ? (parts[0] || '').trim() : horarioReportado).trim();
-                            }
-                        }
-                        
-                        if(existing[ds].tipoReporte==='EXTRA' || existing[ds].tipoReporte==='MIXTO'){ 
-                            var exI=$('ex-'+ds); 
-                            var parts = existing[ds].horarioReportado.split('+');
-                            var exHours = (existing[ds].tipoReporte === 'MIXTO' ? parts[1] : parts[0] || "").trim();
-                            
-                            if(exI) exI.value = exHours; 
-                            var st=rowState(ds); st.ex=true; st.extraHours=exHours; setRowState(ds,st); 
-                        }
-                        
-                        if(existing[ds].timestamp){ try{$('last-update').textContent=new Date(existing[ds].timestamp.toDate()).toLocaleString();}catch(e){} }
-                        applyStateToUI(ds,info.text,info.variable);
-                    }
-                    
-                    var cmInput=$('cm-'+ds); 
-                    if(cmInput) cmInput.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); });
-                    
-                    var varInput = $('var-'+ds);
-                    if (varInput) varInput.addEventListener('blur', function(){ 
-                        applyStateToUI(ds, info.text, info.variable); 
-                        persistState(user,ds,key,info.text,info.variable); 
-                    });
-
-                    var rmEx=$('rmEx-'+ds);
-                    var exInput=$('ex-'+ds), cmx=$('cmEx-'+ds);
-                    function autosaveExtra(){ 
-                        var st=rowState(ds); 
-                        var val=(exInput&&exInput.value||'').trim(); 
-                        if(val){ 
-                            st.ex=true; 
-                            st.ab=false; 
-                            st.extraHours=val; 
-                            setRowState(ds,st); 
-                            applyStateToUI(ds,info.text,info.variable); 
-                            persistState(user,ds,key,info.text,info.variable); 
-                        } 
-                    }
-                    if(exInput){ exInput.addEventListener('blur', autosaveExtra); exInput.addEventListener('change', autosaveExtra); }
-                    if(cmx){ cmx.addEventListener('blur', function(){ persistState(user,ds,key,info.text,info.variable); }); }
-                    if(rmEx) rmEx.addEventListener('click', function(){ var st=rowState(ds); st.ex=false; st.extraHours=""; setRowState(ds,st); applyStateToUI(ds,info.text,info.variable); persistState(user,ds,key,info.text,info.variable); });
-                })(ds,info);
-            }
-            $('submit-month').disabled = lock.locked;
-            $('reset-month').disabled = lock.locked;
-            
-            $('save-all').addEventListener('click', function(){
-                if(user) persistAllRows(user);
-            });
-        });
-    } else if (role === 'admin') {
-        // Si es admin, carga la data del panel
         $('employee-view').classList.add('hidden');
         $('admin-view').classList.remove('hidden');
         loadEmployeesAndRenderLists(user);
@@ -933,12 +519,10 @@
       const scheduleEmployeeList = $('schedule-employee-list');
       const reviewEmployeeList = $('review-employee-list');
 
-      // Limpiar listas anteriores
       if (employeeListContainer) employeeListContainer.innerHTML = '';
       if (scheduleEmployeeList) scheduleEmployeeList.innerHTML = '';
       if (reviewEmployeeList) reviewEmployeeList.innerHTML = '';
 
-      // 1. Cargar todos los empleados de la colección employee_config
       db.collection('employee_config').get()
           .then(snapshot => {
               allEmployees = [];
@@ -948,21 +532,19 @@
               
               snapshot.forEach(doc => {
                   const data = doc.data();
-                  // Asumir que un empleado es válido si tiene userId y nombre
                   if (data.userId && data.nombre) {
                       allEmployees.push(data);
                       
                       const emailParts = data.email.split('@');
                       const username = emailParts.length > 1 ? `@${emailParts[0]}` : data.email;
+                      const isActive = true; 
 
-                      // Crear item de lista para la pestaña Empleados
                       const itemEmp = document.createElement('div');
                       itemEmp.className = 'admin-col-list-item';
                       itemEmp.setAttribute('data-user-id', data.userId);
                       itemEmp.innerHTML = `${data.nombre || 'Sin Nombre'} <span class="username">${username}</span> <span class="chip" style="background: var(--good);">Activo</span>`;
                       fragmentEmpList.appendChild(itemEmp);
                       
-                      // Crear item de lista para la pestaña Horarios
                       const itemSchedule = document.createElement('div');
                       itemSchedule.className = 'admin-col-list-item';
                       itemSchedule.setAttribute('data-user-id', data.userId);
@@ -972,7 +554,6 @@
                       });
                       fragmentScheduleList.appendChild(itemSchedule);
                       
-                      // Crear item de lista para la pestaña Revisión
                       const itemReview = document.createElement('div');
                       itemReview.className = 'admin-col-list-item';
                       itemReview.textContent = data.nombre || 'Sin Nombre';
@@ -989,7 +570,6 @@
               if (scheduleEmployeeList) scheduleEmployeeList.appendChild(fragmentScheduleList);
               if (reviewEmployeeList) reviewEmployeeList.appendChild(fragmentReviewList);
               
-              // Inicializar la gestión de horarios después de cargar
               if (allEmployees.length > 0) {
                   selectEmployeeSchedule(allEmployees[0].userId);
               } else {
@@ -1012,7 +592,6 @@
       const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
       const scheduleByDay = (selectedEmployee && selectedEmployee.scheduleByDay) || {};
 
-      // 1. Marcar el empleado seleccionado
       listItems.forEach(item => {
           if (item.getAttribute('data-user-id') === userId) {
               item.classList.add('selected');
@@ -1027,10 +606,8 @@
           return;
       }
       
-      // 2. Actualizar el título del formulario
       if (formTitle) formTitle.textContent = `Horario de ${selectedEmployee.nombre || selectedEmployee.email}`;
       
-      // 3. Renderizar el formulario de horarios
       let formHTML = '';
       
       days.forEach((day, index) => {
@@ -1050,136 +627,16 @@
       
       if (formContainer) formContainer.innerHTML = formHTML;
       
-      // 4. Adjuntar manejador de guardado (implementación pendiente en persistencia)
       if ($('save-schedule-btn')) $('save-schedule-btn').addEventListener('click', () => {
-          // Lógica de guardado del horario aquí (se conecta a Firebase)
           console.log(`Guardando horario para el usuario: ${userId}`);
       });
   }
-
 
   function paintCurrentUser(){ 
       var u=firebase.auth().currentUser; 
       if(!u) return;
       getRole(u.uid).then(function(role) {
           paintTable(u, role);
-      });
-  }
-  
-  // Omitiendo funciones de persistencia y manejo de planilla (buildRow, persistState, etc.)
-  // para brevedad, asumiendo que ya tienes la versión más reciente y funcional de ellas.
-  // El código completo incluye estas funciones.
-
-  // ... (código de persistState, persistAllRows, paintTable, etc.) ...
-
-  function paintTable(user, role){ 
-    $('user-email').textContent = user.email;
-    
-    if (role === 'employee') {
-        buildMonthSelectors();
-        var key=currentYM();
-        $('employee-view').classList.remove('hidden');
-        $('admin-view').classList.add('hidden');
-        
-        // Carga de la planilla de empleado
-        return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
-            // ... (Lógica de carga de planilla omitida) ...
-            // Asumiendo que la lógica de la planilla está en la versión completa.
-        });
-    } else if (role === 'admin') {
-        // Si es admin, solo se asegura de que la vista de empleado esté oculta y la de admin esté visible
-        $('employee-view').classList.add('hidden');
-        $('admin-view').classList.remove('hidden');
-        loadEmployeesAndRenderLists(user); // Llama a la función para cargar datos del administrador
-    }
-  }
-  
-  // ... (El resto del código como en la versión anterior: persistAllRows, addOrUpdateSingleRow, resetMonth) ...
-  
-  // === INICIO DE LAS FUNCIONES DE MESA ===
-
-  function addOrUpdateSingleRow(user, dateStr){
-    var key=currentYM();
-    return Promise.all([ getConfig(user.uid), getOneReport(user.uid, dateStr), getLock(user.uid, key) ]).then(function(arr){
-      var cfg=arr[0], report=arr[1], lock=arr[2];
-      var date=new Date(dateStr);
-      var info=habitualForDay((cfg&&cfg.scheduleByDay)||{}, date);
-      
-      var existingTr=$('row-'+dateStr); 
-      if(existingTr){ 
-        if(existingTr.nextSibling && existingTr.nextSibling.id==='sub-'+dateStr) existingTr.nextSibling.remove(); 
-        existingTr.remove(); 
-      }
-      
-      var built=buildRow(dateStr, date, info.text, info.variable, lock.locked, report, info.skip && report && report.tipoReporte==='EXTRA');
-      var rows=$('rows'); var days=rows.querySelectorAll('tr[id^="row-"]');
-      var inserted=false;
-      for(var i=0;i<days.length;i++){ var ds=days[i].id.replace('row-',''); if(ds>dateStr){ 
-        rows.insertBefore(built[0], days[i]); 
-        rows.insertBefore(built[1], days[i]); 
-        inserted=true; break; 
-      } }
-      if(!inserted){ 
-        rows.appendChild(built[0]); 
-        rows.appendChild(built[1]); 
-      }
-      applyStateToUI(dateStr, info.text, info.variable);
-    });
-  }
-  
-  function persistAllRows(user) {
-    const key = currentYM();
-    const rows = document.querySelectorAll('tbody#rows tr[id^="row-"]');
-    const savePromises = [];
-    
-    const saveBtn = $('save-all');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Guardando...';
-
-    rows.forEach(tr => {
-      if (tr.id.startsWith('row-')) {
-        const ds = tr.id.replace('row-', '');
-        
-        const date = new Date(key.slice(0, 4), key.slice(5, 7) - 1, ds.slice(8, 10));
-        const cfgPromise = getConfig(user.uid);
-        
-        const ok = $('ok-'+ds);
-        const ab = $('ab-'+ds);
-        const exb = $('exbtn-'+ds);
-        
-        if (ok || ab || exb) {
-            const st = rowState(ds);
-            st.ok = ok.classList.contains('active');
-            st.ab = ab.classList.contains('active');
-            st.ex = exb.classList.contains('active');
-            setRowState(ds, st);
-        }
-        
-        savePromises.push(cfgPromise.then(cfg => {
-          const info = habitualForDay((cfg && cfg.scheduleByDay) || {}, date);
-          
-          return persistState(user, ds, key, info.text, info.variable);
-        }));
-      }
-    });
-
-    return Promise.all(savePromises)
-      .then(() => {
-        const msg = $('emp-msg');
-        if (msg) setMsg(msg, 'Cambios guardados correctamente.', true);
-      })
-      .catch(error => {
-        console.error('Error al guardar todos los cambios:', error);
-        const msg = $('emp-msg');
-        if (msg) setMsg(msg, 'Error al grabar cambios. Revisa la consola.', false);
-      })
-      .finally(() => {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Grabar cambios';
-        setTimeout(() => { 
-            const msg = $('emp-msg'); 
-            if (msg) msg.textContent = ''; 
-        }, 3000);
       });
   }
 
