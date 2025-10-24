@@ -220,7 +220,7 @@
     hrsMain.innerHTML='';
     if(st.ab){
       var chip0=document.createElement('span'); chip0.className='tag'; chip0.textContent='0 h'; hrsMain.appendChild(chip0);
-      if(hrsEx) hrsEx.textContent='—';
+      if(hrsEx) hrsMain.textContent='—';
       return;
     }
     var pusoAlgo=false;
