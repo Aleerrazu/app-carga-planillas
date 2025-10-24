@@ -58,7 +58,6 @@
         var d=q.docs[0]; 
         var o=d.data(); 
         o.id=d.id; 
-        // Asegurar que scheduleByDay exista para evitar errores de renderizado
         if (!o.scheduleByDay) o.scheduleByDay = {};
         return o; 
       });
@@ -347,7 +346,6 @@
         $('admin-view').classList.add('hidden');
         
         // **************** CORRECCIÓN: Manejar la posibilidad de que getConfig falle/sea null ****************
-        // Envuelve la lógica de renderizado de la tabla dentro de la promesa de getConfig
         return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
             var cfg=arr[0], lock=arr[1], existing=arr[2];
             
