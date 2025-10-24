@@ -557,6 +557,7 @@
       days.forEach((day, index) => {
           const key = dayKeys[index];
           const schedule = scheduleByDay[key] || {};
+          // Horario en formato HH:MM-HH:MM
           const value = schedule.start && schedule.end ? `${schedule.start}-${schedule.end}` : '';
           
           formHTML += `
@@ -701,8 +702,7 @@
         btn.dataset.loading = '0';
         msg.style.color = '#fecaca';
       } finally {
-        // En este punto, solo restablecemos si la promesa de login se completó, 
-        // pero la corrección final se hizo en el catch.
+        // Nada de código aquí
       }
     })();
   };
