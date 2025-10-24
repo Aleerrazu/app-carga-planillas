@@ -2,110 +2,250 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>Control Horario • Panel</title>
-  <link rel="icon" href="data:," /> <!-- evita el error 404 del favicon -->
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Control Horario – Panel</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
+  <style>
+    :root{ --bg:#0f172a; --card:#111827; --muted:#1f2937; --accent:#6366f1;
+           --good:#16a34a; --bad:#dc2626; --text:#e5e7eb; --textmuted:#94a3b8; --chip:#334155; --blue:#2563eb; }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b1223,#0f172a);color:var(--text);
+         font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",sans-serif;}
+    .wrap{max-width:1180px;margin:24px auto;padding:0 16px}
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .brand .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px rgba(99,102,241,.8)}
+    .title{font-size:22px;font-weight:700;letter-spacing:.3px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:14px;box-shadow:0 10px 35px rgba(0,0,0,.25)}
+    .grid{display:grid;gap:16px} .grid-3{grid-template-columns:1fr 1fr 1fr}
+    .pad{padding:16px} .muted{color:var(--textmuted)}
+    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .sp{justify-content:space-between}
+    .btn{background:var(--accent);color:white;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    .btn.small{padding:6px 10px;border-radius:999px} .btn.ghost{background:transparent;border:1px solid #334155}
+    .btn.danger{background:#ef4444}
+    .chip{background:#334155;color:#e5e7eb;padding:4px 8px;border-radius:999px;font-size:12px}
+    .hidden{display:none !important} .msg{margin:10px 0;font-size:14px}
+    input,select,textarea{background:#0b1223;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:10px;width:100%}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}
+    th,td{padding:12px 10px;border-bottom:1px solid #1f2937;vertical-align:middle}
+    th{color:#93c5fd;text-align:left;background:#0b1223}
+    .icon{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;font-weight:900;cursor:pointer}
+    .icon.active.good{background:#16a34a;border-color:#16a34a;color:white}
+    .icon.active.bad{background:#dc2626;border-color:#dc2626;color:white}
+    .icon.active.blue{background:#2563eb;border-color:#2563eb;color:white}
+    .icon-row{display:flex;gap:8px;align-items:center;justify-content:center}
+    .subrow{background:#0b1223}
+    .trash{width:36px;height:36px;border-radius:999px;border:2px solid #334155;background:transparent;color:#94a3b8;cursor:pointer}
+    .stack{display:flex;flex-direction:column;gap:4px} .tag{display:inline-block;background:#0b1223;border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:12px}
+  </style>
+  <script>window.__APP_VERSION="v2025.10.21-2044-00 UTC";</script>
 </head>
-
 <body>
-  <!-- Login -->
-  <section id="login-screen" class="panel">
-    <h2>Acceso al sistema</h2>
-    <button id="google-login" class="btn-google">Iniciar sesión con Google</button>
-  </section>
-
-  <!-- Panel Admin -->
-  <section id="admin-panel" class="panel hidden">
-    <header class="top-bar">
-      <h1>Control Horario • Panel</h1>
-      <div class="user-info">
-        <span id="user-email"></span>
-        <span id="role-badge" class="chip">ADMIN</span>
-        <button id="logout-btn" class="btn-logout">Salir</button>
-      </div>
-    </header>
-
-    <div class="tabs">
-      <button class="tab active">🧑 Empleados</button>
-      <button class="tab">🕒 Horarios</button>
-      <button class="tab">📋 Revisión de Planillas</button>
+  <div class="wrap">
+    <div class="brand">
+      <div class="dot"></div>
+      <div class="title">Control Horario · Panel</div>
+      <div class="chip" id="version-chip">v2025.10.21-2044-00 UTC</div>
+      <div style="flex:1"></div>
+      <div class="muted" id="user-email">—</div>
+      <button class="btn small" id="logout-btn" type="button">Salir</button>
     </div>
 
-    <main class="grid-2">
-      <!-- Crear empleado -->
-      <div class="card">
-        <h3>Crear Nuevo Empleado</h3>
-        <label>Nombre Completo</label>
-        <input type="text" id="new-emp-name" placeholder="Nombre completo" />
+    <div class="row hidden" id="role-display" style="margin-bottom:8px;justify-content:flex-end">
+        <div class="chip" id="role-chip">—</div>
+    </div>
 
-        <label>Usuario</label>
-        <input type="text" id="new-emp-user" placeholder="usuario" />
 
-        <label>Email</label>
-        <input type="email" id="new-emp-email" placeholder="ejemplo@dominio.com" />
+    <div id="auth-card" class="card pad">
+      <div class="row sp"><b>Ingresar</b></div>
+      <div class="grid grid-3" style="grid-template-columns:1fr 1fr 1fr">
+        <div><label>Email</label><input id="email" type="email" placeholder="tu@email.com"/></div>
+        <div><label>Contraseña</label><input id="password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter'){doLogin();}"/></div>
+        <div style="align-self:end" class="row">
+          <button class="btn" id="login-btn" type="button" onclick="doLogin()">Entrar</button>
+          <button class="btn" id="register-btn" type="button">Crear cuenta</button>
+          <button class="btn" id="reset-btn" type="button">Blanquear</button>
+        </div>
+      </div>
+      <div class="msg" id="auth-msg"></div>
+    </div>
 
-        <label>ID Empleado</label>
-        <input type="text" id="new-emp-id" placeholder="ID único (opcional)" />
+    <div id="app-card" class="card pad hidden">
+      <div id="employee-view">
+        <div class="row sp">
+          <div class="row">
+            <div>
+              <label>Mes</label>
+              <div class="row" style="gap:8px">
+                <select id="sel-month"></select>
+                <select id="sel-year"></select>
+              </div>
+            </div>
+            <div class="chip">Última actualización: <span id="last-update">—</span></div>
+            <div class="chip">Estado: <span id="lock-state">—</span></div>
+          </div>
+          <div class="row" style="gap:8px">
+            <button class="btn ghost" id="save-all" type="button">Grabar cambios</button> 
+            <button class="btn ghost" id="reset-month" type="button">Resetear planilla</button>
+            <button class="btn" id="submit-month" type="button">Enviar planilla</button>
+          </div>
+        </div>
 
-        <label>Contraseña</label>
-        <input type="password" id="new-emp-pass" placeholder="********" />
+        <div class="card" style="margin-top:12px">
+          <div class="pad row sp"><b>Planilla de Horarios</b><div class="muted">Día · Horario habitual · Acciones · Comentario · Horas trabajadas</div></div>
+          <div class="pad" style="padding-top:0">
+            <table>
+              <colgroup>
+                <col style="width:15%">
+                <col style="width:20%">
+                <col style="width:15%">
+                <col style="width:35%">
+                <col style="width:15%">
+              </colgroup>
+              <thead><tr><th>DÍA</th><th>HORARIO HABITUAL</th><th>ACCIONES</th><th>COMENTARIO</th><th>HS TRABAJADAS</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
 
-        <button id="create-emp" class="btn">Crear Empleado</button>
+        <div class="card pad" style="margin-top:12px">
+          <b>Horas extra en días no habituales</b>
+          <div class="grid grid-3" style="margin-top:8px">
+            <div><label>Fecha</label><input type="date" id="nh-date"></div>
+            <div><label>Horario (HH-HH)</label><input id="nh-range" placeholder="16-20"></div>
+            <div><label>Comentario</label><input id="nh-notes" placeholder="Guardia / reemplazo"></div>
+          </div>
+          <div class="row" style="margin-top:8px"><button class="btn" id="nh-save" type="button">Guardar extra</button><div class="msg" id="nh-msg"></div></div>
+        </div>
+        <div class="msg" id="emp-msg"></div>
       </div>
 
-      <!-- Lista de empleados -->
-      <div class="card">
-        <h3>Lista de Empleados</h3>
-        <p class="muted">Empleados registrados en el sistema</p>
-        <div id="employee-list-container"></div>
+      <div id="admin-view" class="hidden">
+        <div class="pad">
+            <h2 style="margin-top:0;">Panel de Administración</h2>
+            
+            <div class="admin-tab-nav">
+                <button class="admin-tab-btn active" id="tab-empleados">👨‍💼 Empleados</button>
+                <button class="admin-tab-btn" id="tab-horarios">⏰ Horarios</button>
+                <button class="admin-tab-btn" id="tab-planillas">📋 Revisión de Planillas</button>
+            </div>
+            
+            <div id="admin-section-empleados">
+                <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="card pad">
+                        <b>Crear Nuevo Empleado</b>
+                        <div style="margin-top: 10px;">
+                            <div><label>Nombre Completo</label><input type="text" id="new-emp-name" placeholder=""/></div>
+                            <div><label>Usuario</label><input type="text" id="new-emp-username" placeholder="@"/></div>
+                            <div><label>Email</label><input type="email" id="new-emp-email" placeholder="ejemplo@dominio.com"/></div>
+                            <div><label>ID Empleado</label><input type="text" id="new-emp-id" placeholder="ID único (opcional)"/></div>
+                            <div><label>Contraseña</label><input type="password" id="new-emp-password" placeholder="••••••••"/></div>
+                            <button class="btn" style="width: 100%; margin-top: 15px;" id="create-employee-btn">Crear Empleado</button>
+                        </div>
+                    </div>
+
+                    <div class="card pad">
+                        <b>Lista de Empleados</b>
+                        <div class="muted" style="margin-bottom: 10px;">Empleados registrados en el sistema</div>
+                        <div id="employee-list-container">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-section-horarios" class="hidden">
+                <div class="grid" style="grid-template-columns: 3fr 4fr; gap: 20px;">
+                    <div class="card pad">
+                        <b>Seleccionar Empleado</b>
+                        <div class="muted">Elige un empleado para configurar su horario</div>
+                        <div id="schedule-employee-list" style="margin-top: 10px;">
+                            </div>
+                    </div>
+
+                    <div class="card pad">
+                        <b>Horario de [Nombre de Empleado]</b>
+                        <div class="muted" style="margin-bottom: 10px;">Configura el horario base del empleado</div>
+                        <div id="schedule-config-form">
+                            <div class="schedule-day-input"><label>Lunes</label><input placeholder="9:00-18:00 o vacío"/></div>
+                            <div class="schedule-day-input"><label>Martes</label><input placeholder="9:00-18:00 o vacío"/></div>
+                            <div class="schedule-day-input"><label>Miércoles</label><input placeholder="9:00-18:00 o vacío"/></div>
+                            <div class="schedule-day-input"><label>Jueves</label><input placeholder="9:00-18:00 o vacío"/></div>
+                            <div class="schedule-day-input"><label>Viernes</label><input placeholder="9:00-18:00 o vacío"/></div>
+                            <div class="schedule-day-input"><label>Sábado</label><input placeholder="Ej: 9:00-18:00 o dejar vacío si no trabaja"/></div>
+                            <div class="schedule-day-input"><label>Domingo</label><input placeholder="Ej: 9:00-18:00 o dejar vacío si no trabaja"/></div>
+                            <button class="btn" style="width: 100%; margin-top: 15px;" id="save-schedule-btn">Guardar Horario</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-section-planillas" class="hidden">
+                <div class="grid" style="grid-template-columns: 3fr 5fr; gap: 20px;">
+                    <div class="card pad">
+                        <b>Lista de Empleados (Revisión)</b>
+                        <div class="muted">Selecciona un empleado para revisar su planilla</div>
+                        <div id="review-employee-list" style="margin-top: 10px;">
+                            </div>
+                    </div>
+                    
+                    <div class="card pad">
+                        <b>Planilla de [Mes/Año] de [Nombre de Empleado]</b>
+                        <div class="row sp" style="margin-top: 10px;">
+                            <div>
+                                <select id="review-month-sel"></select>
+                                <select id="review-year-sel"></select>
+                            </div>
+                            <button class="btn" id="edit-timesheet-btn">Ver y Editar Planilla</button>
+                        </div>
+                        <div class="muted" style="margin-top: 10px;">Aquí se cargaría la planilla del empleado para revisión.</div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
       </div>
-    </main>
+    </div>
+  </div>
 
-    <!-- Configurar horarios -->
-    <section class="card">
-      <h3 id="selected-employee-name">Horario del empleado</h3>
-      <div id="schedule-config-form"></div>
-    </section>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-    <!-- Revisión -->
-    <section class="card">
-      <h3>Revisión de Planillas</h3>
-      <div id="review-employee-list"></div>
-    </section>
-  </section>
+  <script src="app.js?v=20251021204400"></script>
+  
+  <script>
+    // Lógica para cambiar de pestaña en el Panel de Administración (Solo Front-End)
+    document.addEventListener('DOMContentLoaded', function() {
+        const tabs = {
+            'tab-empleados': 'admin-section-empleados',
+            'tab-horarios': 'admin-section-horarios',
+            'tab-planillas': 'admin-section-planillas'
+        };
 
-  <!-- Panel Empleado -->
-  <section id="employee-panel" class="panel hidden">
-    <header class="top-bar">
-      <h1>Mi Horario</h1>
-      <div class="user-info">
-        <span id="user-email"></span>
-        <span id="role-badge" class="chip">EMPLEADO</span>
-        <button id="logout-btn" class="btn-logout">Salir</button>
-      </div>
-    </header>
+        function switchTab(activeTabId) {
+            Object.keys(tabs).forEach(tabId => {
+                const button = document.getElementById(tabId);
+                const section = document.getElementById(tabs[tabId]);
+                
+                if (tabId === activeTabId) {
+                    button.classList.add('active');
+                    section.classList.remove('hidden');
+                } else {
+                    button.classList.remove('active');
+                    section.classList.add('hidden');
+                }
+            });
+        }
 
-    <main>
-      <div id="employee-schedule" class="card"></div>
-    </main>
-  </section>
+        // Asignar listeners a los botones de pestañas
+        Object.keys(tabs).forEach(tabId => {
+            document.getElementById(tabId)?.addEventListener('click', () => switchTab(tabId));
+        });
 
-  <!-- ================== SCRIPTS ================== -->
-
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
-  <!-- Si usás otros archivos (por ejemplo paintTable.js), van antes de app.js -->
-  <!-- <script src="paintTable.js"></script> -->
-
-  <!-- Tu script principal (último) -->
-  <script src="app.js?v=20251024_02"></script>
-
+        // Asegurar que la pestaña 'Empleados' esté activa por defecto al cargar
+        switchTab('tab-empleados');
+    });
+  </script>
 </body>
 </html>
