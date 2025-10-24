@@ -53,7 +53,15 @@
 
   function getConfig(uid){
     return firebase.firestore().collection('employee_config').where('userId','==',uid).limit(1).get()
-      .then(function(q){ if(q.empty) return null; var d=q.docs[0]; var o=d.data(); o.id=d.id; return o; });
+      .then(function(q){ 
+        if(q.empty) return null; 
+        var d=q.docs[0]; 
+        var o=d.data(); 
+        o.id=d.id; 
+        // Asegurar que scheduleByDay exista para evitar errores de renderizado
+        if (!o.scheduleByDay) o.scheduleByDay = {};
+        return o; 
+      });
   }
   function getLock(uid, key){
     return firebase.firestore().collection('locks').doc(uid+'_'+key).get()
@@ -338,13 +346,31 @@
         $('employee-view').classList.remove('hidden');
         $('admin-view').classList.add('hidden');
         
+        // **************** CORRECCIÓN: Manejar la posibilidad de que getConfig falle/sea null ****************
+        // Envuelve la lógica de renderizado de la tabla dentro de la promesa de getConfig
         return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
             var cfg=arr[0], lock=arr[1], existing=arr[2];
+            
+            // Si la configuración del empleado (cfg) es null (no se encontró), 
+            // no dibujamos las filas o la lógica de la tabla para evitar errores.
+            if (!cfg) {
+                console.warn("Configuración del empleado no encontrada. No se dibuja la tabla.");
+                $('rows').innerHTML = '<tr><td colspan="5" class="muted">Configuración de horario no encontrada.</td></tr>';
+                $('lock-state').textContent = 'Error';
+                $('last-update').textContent = '—';
+                return;
+            }
+
+            // Continuar con el renderizado solo si cfg existe
             $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
             $('last-update').textContent = '—';
             
-            var sbd=(cfg&&cfg.scheduleByDay)||{}; var rows=$('rows'); rows.innerHTML='';
+            var sbd=(cfg&&cfg.scheduleByDay)||{}; 
+            var rows=$('rows'); rows.innerHTML='';
+            
+            var key=currentYM();
             var parts=key.split('-'); var y=parseInt(parts[0],10), m=parseInt(parts[1],10); var count=new Date(y,m,0).getDate();
+            
             for(var d=1; d<=count; d++){
                 var date=new Date(y,m-1,d); var ds=fmt(date);
                 var info=habitualForDay(sbd,date); var hasExisting=!!existing[ds];
@@ -424,7 +450,7 @@
     } else if (role === 'admin') {
         $('employee-view').classList.add('hidden');
         $('admin-view').classList.remove('hidden');
-        loadEmployeesAndRenderLists(user);
+        loadEmployeesAndRenderLists(user); 
     }
   }
 
