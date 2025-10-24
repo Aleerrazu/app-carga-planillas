@@ -178,8 +178,8 @@
     
     if(existing){
       if(existing.tipoReporte==='HABITUAL') st.ok=true;
-      if(existing.tipoReporte==='FALTA') st.ab=true;
-      if(existing.tipoReporte==='EXTRA'){ st.ex=true; st.extraHours=existing.horarioReportado||""; st.cmExtra=existing.comentarios||""; }
+      if(existing.tipoReporte==='FALTA'){ st.ab=true; st.ok=false; }
+      if(existing.tipoReporte==='EXTRA'){ st.ex=true; st.ok=false; st.ab=false; st.extraHours=existing.horarioReportado||""; st.cmExtra=existing.comentarios||""; }
       if(existing.tipoReporte==='MIXTO'){ 
           st.ok=true; 
           st.ex=true; 
@@ -445,11 +445,15 @@
               const fragmentScheduleList = document.createDocumentFragment();
               const fragmentReviewList = document.createDocumentFragment();
               
+              if (snapshot.empty) {
+                   console.log("No se encontraron documentos en employee_config.");
+              }
+              
               snapshot.forEach(doc => {
                   const data = doc.data();
-                  // ** CAMBIO CLAVE: Cargar empleados basados en 'nombre' o 'email' si el 'userId' falta o es inconsistente **
+                  
+                  const userId = data.userId || doc.id; 
                   const name = data.nombre || data.name || 'Sin Nombre';
-                  const userId = data.userId || doc.id; // Usar el ID del documento como fallback
                   const email = data.email || 'N/A';
                   
                   if (userId && name) {
@@ -533,6 +537,7 @@
       days.forEach((day, index) => {
           const key = dayKeys[index];
           const schedule = scheduleByDay[key] || {};
+          // Horario en formato HH:MM-HH:MM
           const value = schedule.start && schedule.end ? `${schedule.start}-${schedule.end}` : '';
           
           formHTML += `
@@ -616,14 +621,11 @@
   });
   $('logout-btn').addEventListener('click', function(){ 
       firebase.auth().signOut(); 
-      // Borrar LocalStorage al salir para forzar una nueva lectura de rol
       if (firebase.auth().currentUser) {
           localStorage.removeItem('userRole_' + firebase.auth().currentUser.uid);
       }
   });
   
-  // Se eliminan los event listeners 'to-employee' y 'to-admin' ya que se eliminó el switch en HTML
-
   function onMonthChange(){ paintCurrentUser(); }
   $('sel-month').addEventListener('change', onMonthChange);
   $('sel-year').addEventListener('change', onMonthChange);
