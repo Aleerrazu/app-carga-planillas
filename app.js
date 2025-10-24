@@ -345,12 +345,9 @@
         $('employee-view').classList.remove('hidden');
         $('admin-view').classList.add('hidden');
         
-        // **************** CORRECCIÓN: Manejar la posibilidad de que getConfig falle/sea null ****************
         return Promise.all([ getConfig(user.uid), getLock(user.uid, key), monthReports(user.uid, key) ]).then(function(arr){
             var cfg=arr[0], lock=arr[1], existing=arr[2];
             
-            // Si la configuración del empleado (cfg) es null (no se encontró), 
-            // no dibujamos las filas o la lógica de la tabla para evitar errores.
             if (!cfg) {
                 console.warn("Configuración del empleado no encontrada. No se dibuja la tabla.");
                 $('rows').innerHTML = '<tr><td colspan="5" class="muted">Configuración de horario no encontrada.</td></tr>';
@@ -359,7 +356,6 @@
                 return;
             }
 
-            // Continuar con el renderizado solo si cfg existe
             $('lock-state').textContent = lock.locked? 'Bloqueado':'Editable';
             $('last-update').textContent = '—';
             
@@ -561,7 +557,6 @@
       days.forEach((day, index) => {
           const key = dayKeys[index];
           const schedule = scheduleByDay[key] || {};
-          // Horario en formato HH:MM-HH:MM
           const value = schedule.start && schedule.end ? `${schedule.start}-${schedule.end}` : '';
           
           formHTML += `
@@ -701,11 +696,13 @@
       } catch (e) {
         console.error(e);
         msg.textContent = e?.message || 'No se pudo ingresar';
-        msg.style.color = '#fecaca';
-      } finally {
         btn.disabled = false;
         btn.textContent = 'Entrar';
         btn.dataset.loading = '0';
+        msg.style.color = '#fecaca';
+      } finally {
+        // En este punto, solo restablecemos si la promesa de login se completó, 
+        // pero la corrección final se hizo en el catch.
       }
     })();
   };
